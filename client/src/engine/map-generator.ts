@@ -29,9 +29,15 @@ export function generateMap(seed: string): TileState[] {
       let type: TileType = "GRASSLAND";
       let walkable = true;
 
-      if (noiseValue < -0.3) {
-        type = "WATER";
-        walkable = false;
+      if ((row === 40 && col === 40) || noiseValue < -0.3) {
+        // Force center to be habitable land (water is -0.3 threshold)
+        if (row === 40 && col === 40) {
+          type = "GRASSLAND";
+          walkable = true;
+        } else {
+          type = "WATER";
+          walkable = false;
+        }
       } else if (noiseValue < -0.05) {
         type = "BARREN";
         walkable = true;
@@ -46,10 +52,12 @@ export function generateMap(seed: string): TileState[] {
         walkable = true;
       }
 
+      const isCenter = row === 40 && col === 40;
+
       tiles.push({
         id,
         type,
-        owned: false,
+        owned: isCenter,
         walkable,
         buildingId: null,
       });

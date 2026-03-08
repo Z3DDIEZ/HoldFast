@@ -266,6 +266,24 @@ function validateAndApplyAction(action: PlayerAction): string | null {
       state.buildings.push(building);
       tile.buildingId = building.id;
       tile.walkable = false;
+
+      // PRD: First TOWN_HALL placement spawns 3 workers
+      if (action.buildingType === "TOWN_HALL" && state.workers.length === 0) {
+        const coord = tileIdToCoord(action.tileId);
+        for (let i = 0; i < 3; i++) {
+          state.workers.push({
+            id: `w-${state.tickCount}-${i}`,
+            state: "IDLE",
+            assignedBuildingId: null,
+            position: { ...coord },
+            path: [],
+            harvestTicks: 0,
+            carrying: null,
+          });
+        }
+        // Give some starting food to prevent immediate starvation
+        state.resources.food = 20;
+      }
       return null;
     }
 

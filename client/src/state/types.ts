@@ -1,4 +1,3 @@
-// NO Math.random() — simulation must be deterministic
 import type {
   GameState as EngineGameState,
   TileState as EngineTileState,
@@ -11,6 +10,7 @@ import type {
   WorkerAgentState,
   TileCoordinate,
 } from "../engine/tick-types";
+import type { GameStore, CameraState } from "./game-store";
 
 export type {
   EngineGameState as GameState,
@@ -23,4 +23,6 @@ export type {
   BuildingType,
   WorkerAgentState,
   TileCoordinate,
+  GameStore,
+  CameraState,
 };

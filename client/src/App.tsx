@@ -7,15 +7,17 @@ import { useGameStore } from "./state/game-store";
 import { CanvasRenderer } from "./renderer/canvas-renderer";
 
 function App() {
-  const initEngine = useGameStore((s) => s.initEngine);
-  const state = useGameStore((s) => s);
-  const placeBuilding = useGameStore((s) => s.placeBuilding);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<CanvasRenderer | null>(null);
 
-  useEffect(() => {
-    initEngine("alpha-seed-2026");
+  const state = useGameStore();
+  const { placeBuilding, initEngine, updateCamera, camera } = state;
 
+  useEffect(() => {
+    initEngine("deterministic-seed-123");
+  }, [initEngine]);
+
+  useEffect(() => {
     if (canvasRef.current && !rendererRef.current) {
       rendererRef.current = new CanvasRenderer(canvasRef.current);
     }
@@ -23,11 +25,13 @@ function App() {
     return () => {
       rendererRef.current?.cleanup();
     };
-  }, [initEngine]);
+  }, []);
 
   useEffect(() => {
-    rendererRef.current?.updateState(state);
-  }, [state]);
+    if (rendererRef.current) {
+      rendererRef.current.updateState(state, camera);
+    }
+  }, [state, camera]);
 
   const handleCanvasClick = (e: React.MouseEvent) => {
     if (!rendererRef.current) return;
@@ -41,9 +45,9 @@ function App() {
   };
 
   const handleWheel = (e: React.WheelEvent) => {
-    if (!rendererRef.current) return;
     const delta = e.deltaY > 0 ? -0.1 : 0.1;
-    rendererRef.current.setZoom(delta);
+    const newZoom = Math.min(Math.max(0.2, camera.zoom + delta), 4.0);
+    updateCamera({ zoom: newZoom });
   };
 
   const isDragging = useRef(false);
@@ -55,10 +59,13 @@ function App() {
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging.current || !rendererRef.current) return;
+    if (!isDragging.current) return;
     const dx = e.clientX - lastMousePos.current.x;
     const dy = e.clientY - lastMousePos.current.y;
-    rendererRef.current.pan(dx, dy);
+    updateCamera({
+      offsetX: camera.offsetX + dx,
+      offsetY: camera.offsetY + dy,
+    });
     lastMousePos.current = { x: e.clientX, y: e.clientY };
   };
 

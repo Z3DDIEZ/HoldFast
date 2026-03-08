@@ -3,14 +3,22 @@ import type { GameState, BuildingType } from "./types";
 import type { WorkerInbound, WorkerOutbound } from "../engine/tick-types";
 import { generateMap } from "../engine/map-generator";
 
+export interface CameraState {
+  zoom: number;
+  offsetX: number;
+  offsetY: number;
+}
+
 export interface GameStore extends GameState {
   selectedBuilding: BuildingType | null;
   saveStatus: "pending" | "synced" | "error"; // UI-only field
+  camera: CameraState;
   initEngine: (seed: string) => void;
   pauseEngine: () => void;
   resumeEngine: () => void;
   selectBuilding: (type: BuildingType | null) => void;
   placeBuilding: (tileId: number) => void;
+  updateCamera: (updates: Partial<CameraState>) => void;
 }
 
 const worker = new Worker(
@@ -56,6 +64,11 @@ export const useGameStore = create<GameStore>((set, get) => {
     workers: [],
     buildings: [],
     selectedBuilding: null,
+    camera: {
+      zoom: 1.0,
+      offsetX: 0,
+      offsetY: 0,
+    },
 
     initEngine: (seed: string) => {
       let initialTiles = get().tiles;
@@ -116,6 +129,12 @@ export const useGameStore = create<GameStore>((set, get) => {
       };
       worker.postMessage(cmd);
       set({ selectedBuilding: null });
+    },
+
+    updateCamera: (updates: Partial<CameraState>) => {
+      set((state) => ({
+        camera: { ...state.camera, ...updates },
+      }));
     },
   };
 });

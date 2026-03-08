@@ -1,4 +1,4 @@
-import type { GameState } from "../state/types";
+import type { GameState, CameraState } from "../state/types";
 import { tileIdToCoord } from "../engine/pathfinder";
 
 const TILE_SIZE = 16;
@@ -17,11 +17,7 @@ export class CanvasRenderer {
   private ctx: CanvasRenderingContext2D;
   private canvas: HTMLCanvasElement;
   private state: GameState | null = null;
-
-  // Camera state
-  private zoom = 1.0;
-  private offsetX = 0;
-  private offsetY = 0;
+  private camera: CameraState | null = null;
 
   // Internal calculated values
   private currentTileSize = TILE_SIZE * BASE_SCALE;
@@ -46,28 +42,20 @@ export class CanvasRenderer {
     this.ctx.imageSmoothingEnabled = false;
   };
 
-  public updateState(newState: GameState) {
+  public updateState(newState: GameState, camera: CameraState) {
     this.state = newState;
-  }
-
-  public setZoom(delta: number) {
-    this.zoom = Math.min(Math.max(0.2, this.zoom + delta), 4.0);
-    this.currentTileSize = TILE_SIZE * BASE_SCALE * this.zoom;
-  }
-
-  public pan(dx: number, dy: number) {
-    this.offsetX += dx;
-    this.offsetY += dy;
+    this.camera = camera;
+    this.currentTileSize = TILE_SIZE * BASE_SCALE * camera.zoom;
   }
 
   public screenToTileId(screenX: number, screenY: number): number | null {
-    if (!this.state) return null;
+    if (!this.state || !this.camera) return null;
 
     const tx = Math.floor(
-      (screenX - this.cameraX - this.offsetX) / this.currentTileSize,
+      (screenX - this.cameraX - this.camera.offsetX) / this.currentTileSize,
     );
     const ty = Math.floor(
-      (screenY - this.cameraY - this.offsetY) / this.currentTileSize,
+      (screenY - this.cameraY - this.camera.offsetY) / this.currentTileSize,
     );
 
     if (tx >= 0 && tx < 80 && ty >= 0 && ty < 80) {
@@ -89,7 +77,7 @@ export class CanvasRenderer {
     this.ctx.fillStyle = COLORS.FOG;
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
-    if (!this.state || !this.state.tiles) return;
+    if (!this.state || !this.state.tiles || !this.camera) return;
 
     const mapWidthPx = 80 * this.currentTileSize;
     const mapHeightPx = 80 * this.currentTileSize;
@@ -98,8 +86,8 @@ export class CanvasRenderer {
     this.cameraX = (this.canvas.width - mapWidthPx) / 2;
     this.cameraY = (this.canvas.height - mapHeightPx) / 2;
 
-    const totalX = this.cameraX + this.offsetX;
-    const totalY = this.cameraY + this.offsetY;
+    const totalX = this.cameraX + this.camera.offsetX;
+    const totalY = this.cameraY + this.camera.offsetY;
 
     for (const tile of this.state.tiles) {
       // PRD: TileState doesn't have visibility for now, but keeping the concept if needed
@@ -123,7 +111,7 @@ export class CanvasRenderer {
       this.ctx.fillRect(px, py, this.currentTileSize, this.currentTileSize);
 
       // Only draw borders if zoomed in enough
-      if (this.zoom > 0.5) {
+      if (this.camera.zoom > 0.5) {
         this.ctx.strokeStyle = colors.border;
         this.ctx.lineWidth = 1;
         this.ctx.strokeRect(px, py, this.currentTileSize, this.currentTileSize);
@@ -153,7 +141,7 @@ export class CanvasRenderer {
           worker.state === "STARVING" ? "#ff5555" : "#ffffff";
         this.ctx.fillRect(px + offset, py + offset, workerSize, workerSize);
 
-        if (worker.carrying && this.zoom > 0.6) {
+        if (worker.carrying && this.camera.zoom > 0.6) {
           this.ctx.fillStyle = "#ffff00";
           this.ctx.fillRect(
             px + offset + workerSize * 0.4,
