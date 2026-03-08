@@ -1,39 +1,54 @@
-import type { TileState } from "../state/types";
+// NO Math.random() — simulation must be deterministic
+import type { TileCoordinate, TileState } from "./tick-types";
 
-interface Node {
+interface PathNode {
   x: number;
   y: number;
   g: number; // Cost from start
   h: number; // Heuristic to end
   f: number; // Total cost
-  parent: Node | null;
+  id: number; // For tie-breaking
+  parent: PathNode | null;
 }
 
-const MAP_SIZE = 80;
+function getManhattanDistance(a: TileCoordinate, b: TileCoordinate): number {
+  return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+}
 
-function getHeuristic(x1: number, y1: number, x2: number, y2: number): number {
-  // Manhattan distance for grid movement
-  return Math.abs(x1 - x2) + Math.abs(y1 - y2);
+export function tileCoordToId(
+  coord: TileCoordinate,
+  mapWidth: number = 80,
+): number {
+  return coord.y * mapWidth + coord.x;
+}
+
+export function tileIdToCoord(
+  id: number,
+  mapWidth: number = 80,
+): TileCoordinate {
+  return {
+    x: id % mapWidth,
+    y: Math.floor(id / mapWidth),
+  };
 }
 
 export function findPath(
-  startX: number,
-  startY: number,
-  endX: number,
-  endY: number,
+  start: TileCoordinate,
+  end: TileCoordinate,
   tiles: TileState[],
-): { x: number; y: number }[] {
-  if (startX === endX && startY === endY) return [];
+): TileCoordinate[] {
+  if (start.x === end.x && start.y === end.y) return [];
 
-  const openList: Node[] = [];
-  const closedSet = new Set<string>();
+  const openList: PathNode[] = [];
+  const closedSet = new Set<number>();
 
-  const startNode: Node = {
-    x: startX,
-    y: startY,
+  const startNode: PathNode = {
+    x: start.x,
+    y: start.y,
     g: 0,
-    h: getHeuristic(startX, startY, endX, endY),
+    h: getManhattanDistance(start, end),
     f: 0,
+    id: tileCoordToId(start),
     parent: null,
   };
   startNode.f = startNode.g + startNode.h;
@@ -41,59 +56,66 @@ export function findPath(
   openList.push(startNode);
 
   while (openList.length > 0) {
-    // Sort open list by f score - lowest first
-    openList.sort((a, b) => a.f - b.f);
+    // Sort open list by f-cost, then by id for deterministic tie-breaking
+    openList.sort((a, b) => {
+      if (a.f !== b.f) return a.f - b.f;
+      return a.id - b.id;
+    });
+
     const current = openList.shift()!;
 
-    if (current.x === endX && current.y === endY) {
+    if (current.x === end.x && current.y === end.y) {
       // Reconstruct path
-      const path: { x: number; y: number }[] = [];
-      let temp: Node | null = current;
-      while (temp.parent) {
+      const path: TileCoordinate[] = [];
+      let temp: PathNode | null = current;
+      // PRD: Returns path from start to end, excluding start, including end.
+      while (temp && (temp.x !== start.x || temp.y !== start.y)) {
         path.push({ x: temp.x, y: temp.y });
         temp = temp.parent;
       }
       return path.reverse();
     }
 
-    const key = `${current.x},${current.y}`;
-    closedSet.add(key);
+    closedSet.add(current.id);
 
-    // Adjacent tiles (up, down, left, right)
-    const neighbors = [
-      { x: current.x, y: current.y - 1 },
-      { x: current.x, y: current.y + 1 },
-      { x: current.x - 1, y: current.y },
-      { x: current.x + 1, y: current.y },
+    // 4-directional neighbours only
+    const directions = [
+      { x: 0, y: -1 }, // Up
+      { x: 0, y: 1 }, // Down
+      { x: -1, y: 0 }, // Left
+      { x: 1, y: 0 }, // Right
     ];
 
-    for (const neighbor of neighbors) {
-      if (
-        neighbor.x < 0 ||
-        neighbor.x >= MAP_SIZE ||
-        neighbor.y < 0 ||
-        neighbor.y >= MAP_SIZE
-      )
-        continue;
-      if (closedSet.has(`${neighbor.x},${neighbor.y}`)) continue;
+    for (const dir of directions) {
+      const nx = current.x + dir.x;
+      const ny = current.y + dir.y;
 
-      const tile = tiles[neighbor.y * MAP_SIZE + neighbor.x];
-      // Pathfinding constraint: Water and Stone Deposits are impassable for now
-      if (tile.type === "water") continue;
+      if (nx < 0 || nx >= 80 || ny < 0 || ny >= 80) continue;
 
-      const gScore = current.g + 1; // uniform cost
+      const nId = ny * 80 + nx;
+      if (closedSet.has(nId)) continue;
 
-      let neighborNode = openList.find(
-        (n) => n.x === neighbor.x && n.y === neighbor.y,
-      );
+      const tile = tiles[nId];
+
+      // Rules:
+      // - A tile is walkable if tile.walkable === true AND tile.buildingId === null
+      // - Exception: the destination tile is always treated as reachable regardless of buildingId
+      const isEnd = nx === end.x && ny === end.y;
+      const isWalkable = tile.walkable && (tile.buildingId === null || isEnd);
+
+      if (!isWalkable) continue;
+
+      const gScore = current.g + 1;
+      let neighborNode = openList.find((n) => n.id === nId);
 
       if (!neighborNode) {
         neighborNode = {
-          x: neighbor.x,
-          y: neighbor.y,
+          x: nx,
+          y: ny,
           g: gScore,
-          h: getHeuristic(neighbor.x, neighbor.y, endX, endY),
+          h: getManhattanDistance({ x: nx, y: ny }, end),
           f: 0,
+          id: nId,
           parent: current,
         };
         neighborNode.f = neighborNode.g + neighborNode.h;
@@ -106,5 +128,5 @@ export function findPath(
     }
   }
 
-  return []; // No path found
+  return []; // No path exists
 }

@@ -1,71 +1,57 @@
+// NO Math.random() — simulation must be deterministic
 import { makeNoise2D } from "open-simplex-noise";
-import type { TileState, TileType } from "../state/types";
+import type { TileState, TileType } from "./tick-types";
 
-const MAP_SIZE = 80;
+const MAP_WIDTH = 80;
+const MAP_HEIGHT = 80;
 
-// Deterministic random pseudo-generator (Mulberry32)
-function mulberry32(a: number) {
-  return function () {
-    let t = (a += 0x6d2b79f5);
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
+// djb2 hash implementation
+function djb2(str: string): number {
+  let hash = 5381;
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash * 33) ^ str.charCodeAt(i);
+  }
+  return hash >>> 0;
 }
 
-// Convert string seed to number
-function seedFromString(seed: string): number {
-  let h = 0;
-  for (let i = 0; i < seed.length; i++)
-    h = (Math.imul(31, h) + seed.charCodeAt(i)) | 0;
-  return h;
-}
-
-export function generateMap(seedString: string): TileState[] {
-  const seedNum = seedFromString(seedString);
-  const prng = mulberry32(seedNum);
+export function generateMap(seed: string): TileState[] {
+  const seedNum = djb2(seed);
   const noise2D = makeNoise2D(seedNum);
+  const scale = 0.05;
 
   const tiles: TileState[] = [];
-  const scale = 0.08;
 
-  for (let y = 0; y < MAP_SIZE; y++) {
-    for (let x = 0; x < MAP_SIZE; x++) {
-      // Base elevation via Simplex noise
-      const elevation = noise2D(x * scale, y * scale);
+  for (let row = 0; row < MAP_HEIGHT; row++) {
+    for (let col = 0; col < MAP_WIDTH; col++) {
+      const noiseValue = noise2D(col * scale, row * scale);
+      const id = row * MAP_WIDTH + col;
 
-      let type: TileType = "grassland";
+      let type: TileType = "GRASSLAND";
+      let walkable = true;
 
-      if (elevation < -0.4) {
-        type = "water";
-      } else if (elevation > 0.6) {
-        type = "barren";
-      } else if (elevation > 0.3) {
-        // Higher altitudes might have forests or stone
-        const roll = prng();
-        if (roll > 0.8) {
-          type = "stone_deposit";
-        } else if (roll > 0.4) {
-          type = "forest";
-        }
+      if (noiseValue < -0.3) {
+        type = "WATER";
+        walkable = false;
+      } else if (noiseValue < -0.05) {
+        type = "BARREN";
+        walkable = true;
+      } else if (noiseValue < 0.2) {
+        type = "GRASSLAND";
+        walkable = true;
+      } else if (noiseValue < 0.5) {
+        type = "FOREST";
+        walkable = true;
       } else {
-        // Medium/Low altitudes
-        if (prng() > 0.85) {
-          type = "forest";
-        }
+        type = "STONE_DEPOSIT";
+        walkable = true;
       }
 
-      // Initial fog of war - only center is visible initially
-      const cx = MAP_SIZE / 2;
-      const cy = MAP_SIZE / 2;
-      const distToCenter = Math.sqrt(Math.pow(x - cx, 2) + Math.pow(y - cy, 2));
-      const visible = distToCenter <= 5; // Reveal radius of 5 from the start
-
       tiles.push({
-        x,
-        y,
+        id,
         type,
-        visible,
+        owned: false,
+        walkable,
+        buildingId: null,
       });
     }
   }

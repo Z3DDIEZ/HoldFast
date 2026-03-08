@@ -1,22 +1,30 @@
 import type { GameState } from "../state/types";
+import { tileIdToCoord } from "../engine/pathfinder";
 
 const TILE_SIZE = 16;
-const SCALE = 2; // Renders 16x16 as 32x32
-const SCALED_TILE = TILE_SIZE * SCALE;
+const BASE_SCALE = 2; // Default scale
 
 const COLORS = {
-  grassland: { base: "#4a7c3f", border: "#3a5e30" },
-  forest: { base: "#2d5a1b", border: "#1e3d12" },
-  stone_deposit: { base: "#7a7a6e", border: "#5a5a50" },
-  water: { base: "#2a5f8f", border: "#1a3f6f" },
-  barren: { base: "#8f7a5a", border: "#6f5a3a" },
-  fog: "#0a0a0a",
+  GRASSLAND: { base: "#4a7c3f", border: "#3a5e30" },
+  FOREST: { base: "#2d5a1b", border: "#1e3d12" },
+  STONE_DEPOSIT: { base: "#7a7a6e", border: "#5a5a50" },
+  WATER: { base: "#2a5f8f", border: "#1a3f6f" },
+  BARREN: { base: "#8f7a5a", border: "#6f5a3a" },
+  FOG: "#0a0a0a",
 };
 
 export class CanvasRenderer {
   private ctx: CanvasRenderingContext2D;
   private canvas: HTMLCanvasElement;
   private state: GameState | null = null;
+
+  // Camera state
+  private zoom = 1.0;
+  private offsetX = 0;
+  private offsetY = 0;
+
+  // Internal calculated values
+  private currentTileSize = TILE_SIZE * BASE_SCALE;
   private cameraX = 0;
   private cameraY = 0;
 
@@ -25,14 +33,10 @@ export class CanvasRenderer {
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("Could not initialize 2D context");
     this.ctx = ctx;
-
-    // Fix scaling to prevent blurriness
     this.ctx.imageSmoothingEnabled = false;
 
     window.addEventListener("resize", this.handleResize);
     this.handleResize();
-
-    // Start render loop
     requestAnimationFrame(this.renderLoop);
   }
 
@@ -46,17 +50,28 @@ export class CanvasRenderer {
     this.state = newState;
   }
 
-  public screenToTile(
-    screenX: number,
-    screenY: number,
-  ): { x: number; y: number } | null {
+  public setZoom(delta: number) {
+    this.zoom = Math.min(Math.max(0.2, this.zoom + delta), 4.0);
+    this.currentTileSize = TILE_SIZE * BASE_SCALE * this.zoom;
+  }
+
+  public pan(dx: number, dy: number) {
+    this.offsetX += dx;
+    this.offsetY += dy;
+  }
+
+  public screenToTileId(screenX: number, screenY: number): number | null {
     if (!this.state) return null;
 
-    const tx = Math.floor((screenX - this.cameraX) / SCALED_TILE);
-    const ty = Math.floor((screenY - this.cameraY) / SCALED_TILE);
+    const tx = Math.floor(
+      (screenX - this.cameraX - this.offsetX) / this.currentTileSize,
+    );
+    const ty = Math.floor(
+      (screenY - this.cameraY - this.offsetY) / this.currentTileSize,
+    );
 
     if (tx >= 0 && tx < 80 && ty >= 0 && ty < 80) {
-      return { x: tx, y: ty };
+      return ty * 80 + tx;
     }
     return null;
   }
@@ -71,61 +86,99 @@ export class CanvasRenderer {
   };
 
   private render() {
-    // Clear canvas
-    this.ctx.fillStyle = COLORS.fog;
+    this.ctx.fillStyle = COLORS.FOG;
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
     if (!this.state || !this.state.tiles) return;
 
-    // Basic centering logic used for coordinate mapping too
-    const mapWidthPx = 80 * SCALED_TILE;
-    const mapHeightPx = 80 * SCALED_TILE;
+    const mapWidthPx = 80 * this.currentTileSize;
+    const mapHeightPx = 80 * this.currentTileSize;
+
+    // Centralized camera base
     this.cameraX = (this.canvas.width - mapWidthPx) / 2;
     this.cameraY = (this.canvas.height - mapHeightPx) / 2;
 
+    const totalX = this.cameraX + this.offsetX;
+    const totalY = this.cameraY + this.offsetY;
+
     for (const tile of this.state.tiles) {
-      if (!tile.visible) continue;
+      // PRD: TileState doesn't have visibility for now, but keeping the concept if needed
+      // Actually PRD has 'owned'. Tile visibility isn't in tick-types but we can assume visible for now.
 
-      const px = this.cameraX + tile.x * SCALED_TILE;
-      const py = this.cameraY + tile.y * SCALED_TILE;
+      const coord = tileIdToCoord(tile.id);
+      const px = totalX + coord.x * this.currentTileSize;
+      const py = totalY + coord.y * this.currentTileSize;
 
-      // Only draw if within viewport roughly
       if (
-        px + SCALED_TILE < 0 ||
+        px + this.currentTileSize < 0 ||
         px > this.canvas.width ||
-        py + SCALED_TILE < 0 ||
+        py + this.currentTileSize < 0 ||
         py > this.canvas.height
       ) {
         continue;
       }
 
-      const colors = COLORS[tile.type] || COLORS.barren;
-
-      // Fill
+      const colors = (COLORS as any)[tile.type] || COLORS.BARREN;
       this.ctx.fillStyle = colors.base;
-      this.ctx.fillRect(px, py, SCALED_TILE, SCALED_TILE);
-      this.ctx.strokeStyle = colors.border;
-      this.ctx.lineWidth = 1;
-      this.ctx.strokeRect(px, py, SCALED_TILE, SCALED_TILE);
+      this.ctx.fillRect(px, py, this.currentTileSize, this.currentTileSize);
+
+      // Only draw borders if zoomed in enough
+      if (this.zoom > 0.5) {
+        this.ctx.strokeStyle = colors.border;
+        this.ctx.lineWidth = 1;
+        this.ctx.strokeRect(px, py, this.currentTileSize, this.currentTileSize);
+      }
+
+      if (tile.owned) {
+        this.ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
+        this.ctx.strokeRect(
+          px + 1,
+          py + 1,
+          this.currentTileSize - 2,
+          this.currentTileSize - 2,
+        );
+      }
     }
 
     // Workers
     if (this.state.workers) {
       for (const worker of this.state.workers) {
-        const px = this.cameraX + worker.x * SCALED_TILE;
-        const py = this.cameraY + worker.y * SCALED_TILE;
-        this.ctx.fillStyle = "#ffffff";
-        this.ctx.fillRect(px + 6, py + 6, SCALED_TILE - 12, SCALED_TILE - 12);
+        const px = totalX + worker.position.x * this.currentTileSize;
+        const py = totalY + worker.position.y * this.currentTileSize;
+
+        const workerSize = this.currentTileSize * 0.4;
+        const offset = (this.currentTileSize - workerSize) / 2;
+
+        this.ctx.fillStyle =
+          worker.state === "STARVING" ? "#ff5555" : "#ffffff";
+        this.ctx.fillRect(px + offset, py + offset, workerSize, workerSize);
+
+        if (worker.carrying && this.zoom > 0.6) {
+          this.ctx.fillStyle = "#ffff00";
+          this.ctx.fillRect(
+            px + offset + workerSize * 0.4,
+            py + offset - 4,
+            4,
+            4,
+          );
+        }
       }
     }
 
     // Buildings
     if (this.state.buildings) {
       for (const building of this.state.buildings) {
-        const px = this.cameraX + building.x * SCALED_TILE;
-        const py = this.cameraY + building.y * SCALED_TILE;
-        this.ctx.fillStyle = "#c04040";
-        this.ctx.fillRect(px + 2, py + 2, SCALED_TILE - 4, SCALED_TILE - 4);
+        const coord = tileIdToCoord(building.tileId);
+        const px = totalX + coord.x * this.currentTileSize;
+        const py = totalY + coord.y * this.currentTileSize;
+
+        this.ctx.fillStyle = building.operational ? "#c04040" : "#444444";
+        this.ctx.fillRect(
+          px + 2,
+          py + 2,
+          this.currentTileSize - 4,
+          this.currentTileSize - 4,
+        );
       }
     }
   }

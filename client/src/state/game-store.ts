@@ -1,14 +1,16 @@
 import { create } from "zustand";
-import type { GameState } from "./types";
-import type { WorkerCommand, WorkerEvent } from "../engine/tick-types";
+import type { GameState, BuildingType } from "./types";
+import type { WorkerInbound, WorkerOutbound } from "../engine/tick-types";
+import { generateMap } from "../engine/map-generator";
 
 export interface GameStore extends GameState {
-  selectedBuilding: string | null;
+  selectedBuilding: BuildingType | null;
+  saveStatus: "pending" | "synced" | "error"; // UI-only field
   initEngine: (seed: string) => void;
   pauseEngine: () => void;
   resumeEngine: () => void;
-  selectBuilding: (type: string | null) => void;
-  placeBuilding: (x: number, y: number) => void;
+  selectBuilding: (type: BuildingType | null) => void;
+  placeBuilding: (tileId: number) => void;
 }
 
 const worker = new Worker(
@@ -20,17 +22,25 @@ const worker = new Worker(
 
 export const useGameStore = create<GameStore>((set, get) => {
   // Listen for Worker messages
-  worker.addEventListener("message", (e: MessageEvent<WorkerEvent>) => {
+  worker.addEventListener("message", (e: MessageEvent<WorkerOutbound>) => {
     const event = e.data;
     switch (event.type) {
-      case "TICK":
-        set((state) => ({ ...state, ...event.payload.deltaState }));
+      case "TICK_RESULT":
+        set((state) => ({
+          ...state,
+          tickCount: event.tickCount,
+          resources: event.resourceTotals,
+          era: event.newEra || state.era,
+          // Note: In a full implementation, we'd update workers/buildings lists properly
+          // For now, these are updated via the full TICK_RESULT if we want.
+          // The PRD says it emits TickResult.
+        }));
         break;
-      case "MAP_GENERATED":
-        set({ tiles: event.payload.tiles });
+      case "READY":
+        console.log("Engine Ready");
         break;
-      case "ERROR":
-        console.error("Worker Error:", event.payload.message);
+      case "ACTION_REJECTED":
+        console.error("Action Rejected:", event.reason, event.action);
         break;
     }
   });
@@ -40,7 +50,7 @@ export const useGameStore = create<GameStore>((set, get) => {
     resources: { food: 0, wood: 0, stone: 0, knowledge: 0 },
     tickCount: 0,
     saveStatus: "synced",
-    lastSavedAt: null,
+    savedAt: null,
     mapSeed: "",
     tiles: [],
     workers: [],
@@ -48,38 +58,64 @@ export const useGameStore = create<GameStore>((set, get) => {
     selectedBuilding: null,
 
     initEngine: (seed: string) => {
-      set({ mapSeed: seed });
-      const cmd: WorkerCommand = {
+      let initialTiles = get().tiles;
+      if (initialTiles.length === 0) {
+        initialTiles = generateMap(seed);
+      }
+      set({ mapSeed: seed, tiles: initialTiles });
+
+      const {
+        mapSeed,
+        tickCount,
+        era,
+        resources,
+        tiles,
+        workers,
+        buildings,
+        savedAt,
+      } = get();
+      const initialState: GameState = {
+        mapSeed,
+        tickCount,
+        era,
+        resources,
+        tiles,
+        workers,
+        buildings,
+        savedAt,
+      };
+
+      const cmd: WorkerInbound = {
         type: "INIT",
-        payload: { seed, tickCount: get().tickCount },
+        state: initialState,
       };
       worker.postMessage(cmd);
     },
 
     pauseEngine: () => {
-      const cmd: WorkerCommand = { type: "PAUSE" };
+      const cmd: WorkerInbound = { type: "PAUSE" };
       worker.postMessage(cmd);
     },
 
     resumeEngine: () => {
-      const cmd: WorkerCommand = { type: "RESUME" };
+      const cmd: WorkerInbound = { type: "RESUME" };
       worker.postMessage(cmd);
     },
 
-    selectBuilding: (type: string | null) => {
+    selectBuilding: (type: BuildingType | null) => {
       set({ selectedBuilding: type });
     },
 
-    placeBuilding: (x: number, y: number) => {
-      const type = get().selectedBuilding;
-      if (!type) return;
+    placeBuilding: (tileId: number) => {
+      const buildingType = get().selectedBuilding;
+      if (!buildingType) return;
 
-      const cmd: WorkerCommand = {
-        type: "PLACE_BUILDING",
-        payload: { buildingType: type, x, y },
+      const cmd: WorkerInbound = {
+        type: "PLAYER_ACTION",
+        action: { type: "PLACE_BUILDING", buildingType, tileId },
       };
       worker.postMessage(cmd);
-      set({ selectedBuilding: null }); // Reset after placement
+      set({ selectedBuilding: null });
     },
   };
 });

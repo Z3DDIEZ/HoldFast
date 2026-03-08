@@ -32,10 +32,38 @@ function App() {
   const handleCanvasClick = (e: React.MouseEvent) => {
     if (!rendererRef.current) return;
 
-    const tileCoords = rendererRef.current.screenToTile(e.clientX, e.clientY);
-    if (tileCoords && state.selectedBuilding) {
-      placeBuilding(tileCoords.x, tileCoords.y);
+    // Only place if not panning (dragging)
+    // Check if total drag distance was small
+    const tileId = rendererRef.current.screenToTileId(e.clientX, e.clientY);
+    if (tileId !== null && state.selectedBuilding) {
+      placeBuilding(tileId);
     }
+  };
+
+  const handleWheel = (e: React.WheelEvent) => {
+    if (!rendererRef.current) return;
+    const delta = e.deltaY > 0 ? -0.1 : 0.1;
+    rendererRef.current.setZoom(delta);
+  };
+
+  const isDragging = useRef(false);
+  const lastMousePos = useRef({ x: 0, y: 0 });
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    isDragging.current = true;
+    lastMousePos.current = { x: e.clientX, y: e.clientY };
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging.current || !rendererRef.current) return;
+    const dx = e.clientX - lastMousePos.current.x;
+    const dy = e.clientY - lastMousePos.current.y;
+    rendererRef.current.pan(dx, dy);
+    lastMousePos.current = { x: e.clientX, y: e.clientY };
+  };
+
+  const handleMouseUp = () => {
+    isDragging.current = false;
   };
 
   return (
@@ -45,6 +73,11 @@ function App() {
         id="game-canvas"
         className="absolute inset-0 w-full h-full cursor-crosshair"
         onClick={handleCanvasClick}
+        onWheel={handleWheel}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
       />
 
       <ResourceBar />

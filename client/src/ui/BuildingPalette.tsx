@@ -1,20 +1,21 @@
 import { useGameStore } from "../state/game-store";
+import type { BuildingType } from "../state/types";
 
 interface BuildingDef {
-  id: string;
+  id: BuildingType;
   name: string;
   requiredEra: number;
 }
 
 const BUILDINGS: BuildingDef[] = [
-  { id: "town_hall", name: "Town Hall", requiredEra: 1 },
-  { id: "forager_hut", name: "Forager Hut", requiredEra: 1 },
-  { id: "lumber_mill", name: "Lumber Mill", requiredEra: 1 },
-  { id: "quarry", name: "Quarry", requiredEra: 1 },
-  { id: "storehouse", name: "Storehouse", requiredEra: 1 },
-  { id: "farm", name: "Farm", requiredEra: 2 },
-  { id: "library", name: "Library", requiredEra: 2 },
-  { id: "barracks", name: "Barracks", requiredEra: 3 },
+  { id: "TOWN_HALL", name: "Town Hall", requiredEra: 1 },
+  { id: "FORAGER_HUT", name: "Forager Hut", requiredEra: 1 },
+  { id: "LUMBER_MILL", name: "Lumber Mill", requiredEra: 1 },
+  { id: "QUARRY", name: "Quarry", requiredEra: 1 },
+  { id: "STOREHOUSE", name: "Storehouse", requiredEra: 1 },
+  { id: "FARM", name: "Farm", requiredEra: 2 },
+  { id: "LIBRARY", name: "Library", requiredEra: 2 },
+  { id: "BARRACKS", name: "Barracks", requiredEra: 3 },
 ];
 
 export function BuildingPalette() {
