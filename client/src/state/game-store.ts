@@ -3,9 +3,12 @@ import type { GameState } from "./types";
 import type { WorkerCommand, WorkerEvent } from "../engine/tick-types";
 
 export interface GameStore extends GameState {
+  selectedBuilding: string | null;
   initEngine: (seed: string) => void;
   pauseEngine: () => void;
   resumeEngine: () => void;
+  selectBuilding: (type: string | null) => void;
+  placeBuilding: (x: number, y: number) => void;
 }
 
 const worker = new Worker(
@@ -42,6 +45,7 @@ export const useGameStore = create<GameStore>((set, get) => {
     tiles: [],
     workers: [],
     buildings: [],
+    selectedBuilding: null,
 
     initEngine: (seed: string) => {
       set({ mapSeed: seed });
@@ -60,6 +64,22 @@ export const useGameStore = create<GameStore>((set, get) => {
     resumeEngine: () => {
       const cmd: WorkerCommand = { type: "RESUME" };
       worker.postMessage(cmd);
+    },
+
+    selectBuilding: (type: string | null) => {
+      set({ selectedBuilding: type });
+    },
+
+    placeBuilding: (x: number, y: number) => {
+      const type = get().selectedBuilding;
+      if (!type) return;
+
+      const cmd: WorkerCommand = {
+        type: "PLACE_BUILDING",
+        payload: { buildingType: type, x, y },
+      };
+      worker.postMessage(cmd);
+      set({ selectedBuilding: null }); // Reset after placement
     },
   };
 });

@@ -19,22 +19,38 @@ const BUILDINGS: BuildingDef[] = [
 
 export function BuildingPalette() {
   const currentEra = useGameStore((s) => s.era);
+  const selectedBuilding = useGameStore((s) => s.selectedBuilding);
+  const selectBuilding = useGameStore((s) => s.selectBuilding);
 
   return (
     <div className="fixed bottom-0 left-0 w-full h-[96px] z-50 flex flex-row items-center px-4 gap-3 bg-[#0f0f0f] border-t border-[#2a2a2a] overflow-x-auto">
       {BUILDINGS.map((b) => {
         const isLocked = b.requiredEra > currentEra;
+        const isSelected = selectedBuilding === b.id;
+
         return (
           <div
             key={b.id}
-            className={`flex-shrink-0 flex items-center justify-center w-[64px] h-[72px] bg-[#0f0f0f] border border-[#2a2a2a] relative select-none ${isLocked ? "opacity-40" : "cursor-pointer hover:border-[#888870]"}`}
+            className={`flex-shrink-0 flex items-center justify-center w-[64px] h-[72px] bg-[#0f0f0f] border relative select-none 
+              ${isLocked ? "opacity-40" : "cursor-pointer hover:border-[#888870]"}
+              ${isSelected ? "border-[#e8e8d0] bg-[#1a1a1a]" : "border-[#2a2a2a]"}
+            `}
             onClick={() => {
-              if (!isLocked) console.log(`Selected building: ${b.id}`);
+              if (isLocked) return;
+              if (isSelected) {
+                selectBuilding(null);
+              } else {
+                selectBuilding(b.id);
+              }
             }}
           >
             <span
               className="text-center px-1"
-              style={{ color: "#e8e8d0", fontSize: "8px", lineHeight: "1.4" }}
+              style={{
+                color: isSelected ? "#ffffff" : "#e8e8d0",
+                fontSize: "8px",
+                lineHeight: "1.4",
+              }}
             >
               {b.name}
             </span>

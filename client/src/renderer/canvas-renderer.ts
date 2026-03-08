@@ -2,6 +2,7 @@ import type { GameState } from "../state/types";
 
 const TILE_SIZE = 16;
 const SCALE = 2; // Renders 16x16 as 32x32
+const SCALED_TILE = TILE_SIZE * SCALE;
 
 const COLORS = {
   grassland: { base: "#4a7c3f", border: "#3a5e30" },
@@ -45,6 +46,21 @@ export class CanvasRenderer {
     this.state = newState;
   }
 
+  public screenToTile(
+    screenX: number,
+    screenY: number,
+  ): { x: number; y: number } | null {
+    if (!this.state) return null;
+
+    const tx = Math.floor((screenX - this.cameraX) / SCALED_TILE);
+    const ty = Math.floor((screenY - this.cameraY) / SCALED_TILE);
+
+    if (tx >= 0 && tx < 80 && ty >= 0 && ty < 80) {
+      return { x: tx, y: ty };
+    }
+    return null;
+  }
+
   public cleanup() {
     window.removeEventListener("resize", this.handleResize);
   }
@@ -61,27 +77,23 @@ export class CanvasRenderer {
 
     if (!this.state || !this.state.tiles) return;
 
-    const scaledTileSize = TILE_SIZE * SCALE;
-    const tiles = this.state.tiles;
-
-    // Basic centering for MVP
-    const mapWidthPx = 80 * scaledTileSize;
-    const mapHeightPx = 80 * scaledTileSize;
-
+    // Basic centering logic used for coordinate mapping too
+    const mapWidthPx = 80 * SCALED_TILE;
+    const mapHeightPx = 80 * SCALED_TILE;
     this.cameraX = (this.canvas.width - mapWidthPx) / 2;
     this.cameraY = (this.canvas.height - mapHeightPx) / 2;
 
-    for (const tile of tiles) {
+    for (const tile of this.state.tiles) {
       if (!tile.visible) continue;
 
-      const px = this.cameraX + tile.x * scaledTileSize;
-      const py = this.cameraY + tile.y * scaledTileSize;
+      const px = this.cameraX + tile.x * SCALED_TILE;
+      const py = this.cameraY + tile.y * SCALED_TILE;
 
       // Only draw if within viewport roughly
       if (
-        px + scaledTileSize < 0 ||
+        px + SCALED_TILE < 0 ||
         px > this.canvas.width ||
-        py + scaledTileSize < 0 ||
+        py + SCALED_TILE < 0 ||
         py > this.canvas.height
       ) {
         continue;
@@ -91,27 +103,29 @@ export class CanvasRenderer {
 
       // Fill
       this.ctx.fillStyle = colors.base;
-      this.ctx.fillRect(px, py, scaledTileSize, scaledTileSize);
-
-      // Border
+      this.ctx.fillRect(px, py, SCALED_TILE, SCALED_TILE);
       this.ctx.strokeStyle = colors.border;
       this.ctx.lineWidth = 1;
-      this.ctx.strokeRect(px, py, scaledTileSize, scaledTileSize);
+      this.ctx.strokeRect(px, py, SCALED_TILE, SCALED_TILE);
     }
 
-    // Draw buildings (Placeholder MVP boxes)
+    // Workers
+    if (this.state.workers) {
+      for (const worker of this.state.workers) {
+        const px = this.cameraX + worker.x * SCALED_TILE;
+        const py = this.cameraY + worker.y * SCALED_TILE;
+        this.ctx.fillStyle = "#ffffff";
+        this.ctx.fillRect(px + 6, py + 6, SCALED_TILE - 12, SCALED_TILE - 12);
+      }
+    }
+
+    // Buildings
     if (this.state.buildings) {
       for (const building of this.state.buildings) {
-        const px = this.cameraX + building.x * scaledTileSize;
-        const py = this.cameraY + building.y * scaledTileSize;
-
-        this.ctx.fillStyle = "#c04040"; // temporary red box
-        this.ctx.fillRect(
-          px + 4,
-          py + 4,
-          scaledTileSize - 8,
-          scaledTileSize - 8,
-        );
+        const px = this.cameraX + building.x * SCALED_TILE;
+        const py = this.cameraY + building.y * SCALED_TILE;
+        this.ctx.fillStyle = "#c04040";
+        this.ctx.fillRect(px + 2, py + 2, SCALED_TILE - 4, SCALED_TILE - 4);
       }
     }
   }

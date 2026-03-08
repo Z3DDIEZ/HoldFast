@@ -20,11 +20,18 @@ export interface TileState {
   visible: boolean; // Fog of war
 }
 
+export interface WorkerTask {
+  type: "idle" | "harvest" | "deposit" | "construct";
+  targetId?: string; // Tile ID or Building ID
+}
+
 export interface WorkerState {
   id: string;
   x: number;
   y: number;
-  currentTask: "idle" | "harvest" | "deposit" | "construct";
+  currentTask: WorkerTask;
+  taskQueue: WorkerTask[];
+  path: { x: number; y: number }[];
   assignedBuildingId?: string;
 }
 
