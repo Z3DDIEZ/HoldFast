@@ -1,35 +1,57 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { useEffect, useRef } from "react";
+import { ResourceBar } from "./ui/ResourceBar";
+import { EraPanel } from "./ui/EraPanel";
+import { BuildingPalette } from "./ui/BuildingPalette";
+import { useGameStore } from "./state/game-store";
+import { CanvasRenderer } from "./renderer/canvas-renderer";
 
 function App() {
-  const [count, setCount] = useState(0)
+  const initEngine = useGameStore((s) => s.initEngine);
+  const state = useGameStore((s) => s); // subscribe to all state for the renderer to sync
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const rendererRef = useRef<CanvasRenderer | null>(null);
+
+  // Initialize engine and renderer
+  useEffect(() => {
+    // Generate deterministic start
+    initEngine("alpha-seed-2026");
+
+    if (canvasRef.current && !rendererRef.current) {
+      rendererRef.current = new CanvasRenderer(canvasRef.current);
+    }
+
+    return () => {
+      if (rendererRef.current) {
+        rendererRef.current.cleanup();
+      }
+    };
+  }, [initEngine]);
+
+  // Sync state cleanly
+  useEffect(() => {
+    if (rendererRef.current) {
+      rendererRef.current.updateState(state);
+    }
+  }, [state]);
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
+    <div className="relative w-screen h-screen overflow-hidden bg-black">
+      <canvas
+        ref={canvasRef}
+        id="game-canvas"
+        className="absolute inset-0 w-full h-full"
+      />
+
+      <ResourceBar />
+      <EraPanel />
+      <BuildingPalette />
+
+      {/* Minimap placeholder */}
+      <div className="fixed bottom-[96px] right-0 w-[160px] h-[160px] border border-[#2a2a2a] bg-[#0f0f0f] z-40 flex items-center justify-center pointer-events-none">
+        <span style={{ color: "#888870", fontSize: "8px" }}>MINIMAP</span>
       </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+    </div>
+  );
 }
 
-export default App
+export default App;
