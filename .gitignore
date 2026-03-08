@@ -1,0 +1,25 @@
+/AG-docs
+
+*.ps1
+init.js
+
+# Node
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# .NET Core
+[Bb]in/
+[Oo]bj/
+*.user
+*.userosscache
+*.sln.docstates
+
+# IDE / Editor configuration
+.vscode/
+.idea/
+.vs/
+*.suo
+*.userprefs
+.DS_Store
