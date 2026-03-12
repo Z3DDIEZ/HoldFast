@@ -9,6 +9,7 @@ import type {
   BuildingType,
   WorkerAgentState,
   TileCoordinate,
+  ResourceUnit,
 } from "../engine/tick-types";
 import type { GameStore, CameraState } from "./game-store";
 
@@ -23,6 +24,7 @@ export type {
   BuildingType,
   WorkerAgentState,
   TileCoordinate,
+  ResourceUnit,
   GameStore,
   CameraState,
 };

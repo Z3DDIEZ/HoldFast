@@ -1,17 +1,27 @@
+/** SaveStatusIndicator props. */
 interface Props {
   status: "pending" | "synced" | "error";
   lastSavedAt: string | null;
 }
 
+/** Status colours matching the PRD HUD palette. */
+const STATUS_COLORS = {
+  synced: "#4aaf4a",
+  pending: "#c8a020",
+  error: "#c04040",
+} as const;
+
+/**
+ * Compact save status indicator showing a coloured dot
+ * and timestamp. Sits inside the ResourceBar, right-aligned.
+ */
 export function SaveStatusIndicator({ status, lastSavedAt }: Props) {
-  let color = "#4aaf4a"; // synced
+  const color = STATUS_COLORS[status];
   let text = "SAVED";
 
   if (status === "pending") {
-    color = "#c8a020";
     text = "SAVING...";
   } else if (status === "error") {
-    color = "#c04040";
     text = "ERROR";
   }
 
@@ -28,7 +38,13 @@ export function SaveStatusIndicator({ status, lastSavedAt }: Props) {
 
   return (
     <div className="flex items-center gap-2">
-      <div style={{ backgroundColor: color }} className="w-2 h-2" />
+      <div
+        className="w-2 h-2"
+        style={{
+          backgroundColor: color,
+          boxShadow: `0 0 4px ${color}`,
+        }}
+      />
       <span style={{ color: "#888870", fontSize: "7px" }}>{text}</span>
     </div>
   );

@@ -10,9 +10,32 @@
     margin: 0;
     overflow: hidden;
   }
+
+  /* Pixel-art rendering for all canvas elements */
+  canvas {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+  }
 }
 
-/* Make sure the pixel font is crispy */
+/* Pixel font crispness — consistent letter spacing per PRD */
 * {
   letter-spacing: 0.05em;
+}
+
+/* Custom scrollbar for the building palette overflow */
+.overflow-x-auto::-webkit-scrollbar {
+  height: 4px;
+}
+
+.overflow-x-auto::-webkit-scrollbar-track {
+  background: #0f0f0f;
+}
+
+.overflow-x-auto::-webkit-scrollbar-thumb {
+  background: #2a2a2a;
+}
+
+.overflow-x-auto::-webkit-scrollbar-thumb:hover {
+  background: #3a3a3a;
 }

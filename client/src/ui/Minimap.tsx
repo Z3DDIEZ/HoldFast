@@ -3,10 +3,13 @@ import { useGameStore } from "../state/game-store";
 import type { TileType } from "../state/types";
 import { tileIdToCoord } from "../engine/pathfinder";
 
-const TILE_SIZE = 2; // 2x2 pixels per tile on minimap
+/** Minimap pixels per tile. */
+const TILE_SIZE = 2;
+/** Map dimension in tiles. */
 const MAP_DIM = 80;
 
-const COLORS: Record<TileType, string> = {
+/** Tile base colours for minimap rendering. */
+const TILE_COLORS: Record<TileType, string> = {
   GRASSLAND: "#4a7c3f",
   FOREST: "#2d5a1b",
   STONE_DEPOSIT: "#7a7a6e",
@@ -14,8 +17,33 @@ const COLORS: Record<TileType, string> = {
   BARREN: "#8f7a5a",
 };
 
-const FOG_COLOR = "#000000";
+/** Brighter owned-territory tint colours. */
+const OWNED_COLORS: Record<TileType, string> = {
+  GRASSLAND: "#6aaf55",
+  FOREST: "#3d7a25",
+  STONE_DEPOSIT: "#9a9a8e",
+  WATER: "#3a7fbf",
+  BARREN: "#a89060",
+};
 
+const FOG_COLOR = "#0a0a0a";
+
+/** Building colours for minimap dots. */
+const BUILDING_COLORS: Record<string, string> = {
+  TOWN_HALL: "#c8a020",
+  FORAGER_HUT: "#6aaf55",
+  LUMBER_MILL: "#8b6914",
+  QUARRY: "#909090",
+  STOREHOUSE: "#c8b888",
+  FARM: "#4a8f3f",
+  LIBRARY: "#6a60c0",
+  BARRACKS: "#c04040",
+};
+
+/**
+ * Minimap component: 160×160px scaled-down view of the full map.
+ * Click-to-navigate, shows owned territory, buildings, and viewport rectangle.
+ */
 export function Minimap() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const tiles = useGameStore((s) => s.tiles);
@@ -23,6 +51,7 @@ export function Minimap() {
   const camera = useGameStore((s) => s.camera);
   const updateCamera = useGameStore((s) => s.updateCamera);
 
+  /** Handle minimap click — center the main viewport on the clicked tile. */
   const handleMinimapClick = (e: React.MouseEvent) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -30,18 +59,26 @@ export function Minimap() {
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
-    // Map coordinate (0-160) to global map units
-    const tx = (x / (MAP_DIM * TILE_SIZE)) * 80;
-    const ty = (y / (MAP_DIM * TILE_SIZE)) * 80;
+    // Convert minimap pixel to tile coordinate
+    const tileX = (x / (MAP_DIM * TILE_SIZE)) * MAP_DIM;
+    const tileY = (y / (MAP_DIM * TILE_SIZE)) * MAP_DIM;
 
-    // Center camera on this tile
-    // 1 tile = 32px standard (16*2).
-    // center of screen = window.innerWidth/2
+    // Calculate offset to center this tile in the viewport
     const tileSizePx = 16 * 2 * camera.zoom;
-    const targetOffsetNX = window.innerWidth / 2 - tx * tileSizePx;
-    const targetOffsetNY = window.innerHeight / 2 - ty * tileSizePx;
+    const mapWidthPx = MAP_DIM * tileSizePx;
 
-    updateCamera({ offsetX: targetOffsetNX, offsetY: targetOffsetNY });
+    // cameraX is the base centering offset: (viewportWidth - mapWidth) / 2
+    // So total tile position in screen space = cameraX + offsetX + tileX * tileSizePx
+    // We want tileX * tileSizePx + cameraX + newOffsetX = viewportWidth / 2
+    // => newOffsetX = viewportWidth/2 - cameraX - tileX * tileSizePx
+    const cameraBaseX = (window.innerWidth - mapWidthPx) / 2;
+    const cameraBaseY = (window.innerHeight - mapWidthPx) / 2;
+
+    const newOffsetX = window.innerWidth / 2 - cameraBaseX - tileX * tileSizePx;
+    const newOffsetY =
+      window.innerHeight / 2 - cameraBaseY - tileY * tileSizePx;
+
+    updateCamera({ offsetX: newOffsetX, offsetY: newOffsetY });
   };
 
   useEffect(() => {
@@ -50,14 +87,23 @@ export function Minimap() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // Clear and draw background
+    // Clear
     ctx.fillStyle = FOG_COLOR;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     if (tiles && tiles.length > 0) {
+      // Render tiles
       for (const tile of tiles) {
         const coord = tileIdToCoord(tile.id);
-        ctx.fillStyle = COLORS[tile.type] || COLORS.BARREN;
+
+        if (!tile.visible) {
+          ctx.fillStyle = FOG_COLOR;
+        } else if (tile.owned) {
+          ctx.fillStyle = OWNED_COLORS[tile.type] || TILE_COLORS.BARREN;
+        } else {
+          ctx.fillStyle = TILE_COLORS[tile.type] || TILE_COLORS.BARREN;
+        }
+
         ctx.fillRect(
           coord.x * TILE_SIZE,
           coord.y * TILE_SIZE,
@@ -67,11 +113,11 @@ export function Minimap() {
       }
     }
 
-    // Draw buildings as small white dots
+    // Draw buildings as coloured dots
     if (buildings) {
-      ctx.fillStyle = "#ffffff";
       for (const building of buildings) {
         const coord = tileIdToCoord(building.tileId);
+        ctx.fillStyle = BUILDING_COLORS[building.type] || "#ffffff";
         ctx.fillRect(
           coord.x * TILE_SIZE,
           coord.y * TILE_SIZE,
@@ -83,24 +129,27 @@ export function Minimap() {
 
     // Draw viewport rectangle
     const tileSizePx = 16 * 2 * camera.zoom;
-    const viewW = (window.innerWidth / tileSizePx) * TILE_SIZE;
-    const viewH = (window.innerHeight / tileSizePx) * TILE_SIZE;
+    const mapWidthPx = MAP_DIM * tileSizePx;
 
-    // Reverse calculation: where is (window.innerWidth/2 - camera.offsetX) / tileSizePx ?
-    // Actually totalX = cameraX (centered map) + offsetX.
-    // So 0,0 on screen = - (cameraX + offsetX) / tileSizePx
-    // Let's simplify:
-    // center of view in map tiles:
-    const mapWidthPx = 80 * tileSizePx;
-    const cameraX = (window.innerWidth - mapWidthPx) / 2;
-    // Wait, cameraY calculation depends on mapHeightPx which is same as mapWidthPx here (80*80).
-    const cameraY = (window.innerHeight - mapWidthPx) / 2;
-    const viewTileX = (0 - cameraX - camera.offsetX) / tileSizePx;
-    const viewTileY = (0 - cameraY - camera.offsetY) / tileSizePx;
+    const cameraBaseX = (window.innerWidth - mapWidthPx) / 2;
+    const cameraBaseY = (window.innerHeight - mapWidthPx) / 2;
 
-    ctx.strokeStyle = "#ffffff";
+    // Top-left of viewport in tile coordinates
+    const viewTileX = (0 - cameraBaseX - camera.offsetX) / tileSizePx;
+    const viewTileY = (0 - cameraBaseY - camera.offsetY) / tileSizePx;
+
+    // Viewport size in tile coordinates
+    const viewTilesW = window.innerWidth / tileSizePx;
+    const viewTilesH = window.innerHeight / tileSizePx;
+
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.7)";
     ctx.lineWidth = 1;
-    ctx.strokeRect(viewTileX * TILE_SIZE, viewTileY * TILE_SIZE, viewW, viewH);
+    ctx.strokeRect(
+      viewTileX * TILE_SIZE,
+      viewTileY * TILE_SIZE,
+      viewTilesW * TILE_SIZE,
+      viewTilesH * TILE_SIZE,
+    );
   }, [tiles, buildings, camera]);
 
   return (
@@ -109,13 +158,13 @@ export function Minimap() {
         ref={canvasRef}
         width={MAP_DIM * TILE_SIZE}
         height={MAP_DIM * TILE_SIZE}
-        className="rendering-pixelated cursor-pointer pointer-events-auto"
+        className="cursor-pointer pointer-events-auto"
         style={{ imageRendering: "pixelated" }}
         onClick={handleMinimapClick}
       />
-      <div className="absolute top-1 left-1 px-1 bg-[#0f0f0f88] pointer-events-none">
+      <div className="absolute top-1 left-1 px-1 bg-[#0f0f0f]/70 pointer-events-none">
         <span style={{ color: "#888870", fontSize: "6px" }}>
-          ZOOM: {camera.zoom.toFixed(1)}x
+          {camera.zoom.toFixed(1)}×
         </span>
       </div>
     </div>

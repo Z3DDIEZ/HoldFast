@@ -7,21 +7,35 @@ import type {
   PlayerAction,
   TickResult,
   ResourcePool,
+  ResourceType,
   BuildingState,
   WorkerState,
 } from "./tick-types";
 import { findPath, tileIdToCoord } from "./pathfinder";
+import { expandTerritory, MAP_WIDTH } from "./map-generator";
 
-const MAP_WIDTH = 80;
 const TICK_MS = 2000;
 const BASE_STORAGE = 200;
 const STOREHOUSE_BONUS = 200;
 const WORKER_UPKEEP_FOOD = 1;
 
+/** Knowledge cost to advance eras. Keyed by current era. */
 const ERA_THRESHOLDS = { 1: 50, 2: 200 } as const;
+/** Worker count gate to advance eras. Keyed by current era. */
 const ERA_POPULATION_GATES = { 1: 3, 2: 8 } as const;
 
-const BUILDING_CONFIG = {
+/** Building configuration table matching PRD §14.6. */
+const BUILDING_CONFIG: Record<
+  string,
+  {
+    resource: ResourceType | null;
+    ticksToHarvest: number;
+    yieldAmount: number;
+    requiredWorkers: number;
+    requiredEra: number;
+    cost: Partial<ResourcePool>;
+  }
+> = {
   TOWN_HALL: {
     resource: null,
     ticksToHarvest: 0,
@@ -86,7 +100,7 @@ const BUILDING_CONFIG = {
     requiredEra: 3,
     cost: { wood: 30, stone: 30 },
   },
-} as const;
+};
 
 let state: GameState | null = null;
 let actionQueue: PlayerAction[] = [];
@@ -97,16 +111,35 @@ function emit(msg: WorkerOutbound) {
   self.postMessage(msg);
 }
 
+/** Compute current storage capacity based on placed Storehouses. */
+function getStorageCapacity(buildings: BuildingState[]): number {
+  const storehouses = buildings.filter((b) => b.type === "STOREHOUSE").length;
+  return BASE_STORAGE + storehouses * STOREHOUSE_BONUS;
+}
+
+/** Check if any deposit target (Storehouse/Town Hall) has remaining capacity. */
+function hasDepositCapacity(
+  resources: ResourcePool,
+  buildings: BuildingState[],
+): boolean {
+  const capacity = getStorageCapacity(buildings);
+  // If any resource is below capacity, deposits can be accepted
+  return (
+    resources.food < capacity ||
+    resources.wood < capacity ||
+    resources.stone < capacity ||
+    resources.knowledge < capacity
+  );
+}
+
 function runTick() {
   if (!state) return;
 
-  const snapshotStart = JSON.parse(
-    JSON.stringify(state.resources),
-  ) as ResourcePool;
+  const snapshotStart: ResourcePool = { ...state.resources };
   const actionRejections: { action: PlayerAction; reason: string }[] = [];
   let eraChangedThisTick = false;
 
-  // STEP 1 — Drain action queue (FIFO)
+  // ─── STEP 1 — Drain action queue (FIFO) ───
   const currentActions = [...actionQueue];
   actionQueue = [];
 
@@ -117,7 +150,7 @@ function runTick() {
     }
   }
 
-  // STEP 2 — Evaluate worker state machines
+  // ─── STEP 2 — Evaluate worker state machines ───
   const workers = [...state.workers].sort((a, b) => a.id.localeCompare(b.id));
   const workerDepositDelta: ResourcePool = {
     food: 0,
@@ -130,7 +163,7 @@ function runTick() {
     processWorkerStateMachine(worker, workerDepositDelta);
   }
 
-  // STEP 3 — Production
+  // ─── STEP 3 — Production ───
   const productionDelta: ResourcePool = {
     food: 0,
     wood: 0,
@@ -148,8 +181,10 @@ function runTick() {
   );
   for (const b of buildings) {
     const config = BUILDING_CONFIG[b.type];
+    if (!config) continue;
+
     b.staffed = b.assignedWorkerIds.length >= config.requiredWorkers;
-    b.operational = b.staffed; // MVP rule
+    b.operational = b.staffed; // MVP rule: staffed = operational
 
     if (b.staffed && b.operational && config.resource) {
       productionDelta[config.resource] += config.yieldAmount;
@@ -161,25 +196,23 @@ function runTick() {
     });
   }
 
-  // STEP 4 — Consumption
+  // ─── STEP 4 — Consumption ───
   const totalUpkeep = state.workers.length * WORKER_UPKEEP_FOOD;
   const netFoodDelta =
     productionDelta.food + workerDepositDelta.food - totalUpkeep;
 
   if (state.resources.food + netFoodDelta < 0) {
+    // Starvation: all workers enter STARVING state
     state.workers.forEach((w) => (w.state = "STARVING"));
   } else {
-    // If food will be positive, transition STARVING workers back to IDLE
+    // Food is available: recover any STARVING workers
     state.workers.forEach((w) => {
       if (w.state === "STARVING") w.state = "IDLE";
     });
   }
 
-  // STEP 5 — Commit delta
-  const storehouseCount = state.buildings.filter(
-    (b) => b.type === "STOREHOUSE",
-  ).length;
-  const capacity = BASE_STORAGE + storehouseCount * STOREHOUSE_BONUS;
+  // ─── STEP 5 — Commit delta to ResourcePool ───
+  const capacity = getStorageCapacity(state.buildings);
 
   const combinedDelta: ResourcePool = {
     food: productionDelta.food + workerDepositDelta.food - totalUpkeep,
@@ -188,17 +221,24 @@ function runTick() {
     knowledge: productionDelta.knowledge + workerDepositDelta.knowledge,
   };
 
-  for (const r in state.resources) {
-    const key = r as keyof ResourcePool;
+  const resourceKeys: (keyof ResourcePool)[] = [
+    "food",
+    "wood",
+    "stone",
+    "knowledge",
+  ];
+  for (const key of resourceKeys) {
     state.resources[key] = Math.min(
       Math.max(0, state.resources[key] + combinedDelta[key]),
       capacity,
     );
   }
 
-  // STEP 6 — Era progression handled in Step 1
+  // ─── STEP 6 — Era progression (PRD: action-driven via RESEARCH_ERA) ───
+  // Era advancement is player-initiated through the RESEARCH_ERA action
+  // processed in Step 1. This step is reserved for future passive triggers.
 
-  // STEP 7 — Emit TickResult
+  // ─── STEP 7 — Compute TickResult delta & emit ───
   state.tickCount++;
 
   const resourceDelta: ResourcePool = {
@@ -222,6 +262,13 @@ function runTick() {
     eraChanged: eraChangedThisTick,
     newEra: state.era,
     actionRejections,
+    // Full state sync for UI rendering
+    workers: state.workers.map((w) => ({ ...w, path: [...w.path] })),
+    buildings: state.buildings.map((b) => ({
+      ...b,
+      assignedWorkerIds: [...b.assignedWorkerIds],
+    })),
+    tiles: state.tiles,
   };
 
   emit(tickResult);
@@ -238,20 +285,19 @@ function validateAndApplyAction(action: PlayerAction): string | null {
         return "TILE_INVALID";
 
       const config = BUILDING_CONFIG[action.buildingType];
+      if (!config) return "UNKNOWN_BUILDING_TYPE";
       if (state.era < config.requiredEra) return "ERA_LOCKED";
 
       // Check costs
-      const cost = config.cost as Partial<ResourcePool>;
-      for (const r in cost) {
-        const key = r as keyof ResourcePool;
-        if (state.resources[key] < (cost[key] || 0))
+      const cost = config.cost;
+      for (const r of Object.keys(cost) as (keyof ResourcePool)[]) {
+        if (state.resources[r] < (cost[r] || 0))
           return "INSUFFICIENT_RESOURCES";
       }
 
-      // Apply
-      for (const r in cost) {
-        const key = r as keyof ResourcePool;
-        state.resources[key] -= cost[key] || 0;
+      // Deduct costs
+      for (const r of Object.keys(cost) as (keyof ResourcePool)[]) {
+        state.resources[r] -= cost[r] || 0;
       }
 
       const building: BuildingState = {
@@ -267,6 +313,20 @@ function validateAndApplyAction(action: PlayerAction): string | null {
       tile.buildingId = building.id;
       tile.walkable = false;
 
+      // Expand territory around the new building
+      expandTerritory(state.tiles, action.tileId, 3, 5);
+
+      // Invalidate worker paths that cross this tile
+      state.workers.forEach((w) => {
+        if (
+          w.path.some(
+            (coord) => coord.y * MAP_WIDTH + coord.x === action.tileId,
+          )
+        ) {
+          w.path = [];
+        }
+      });
+
       // PRD: First TOWN_HALL placement spawns 3 workers
       if (action.buildingType === "TOWN_HALL" && state.workers.length === 0) {
         const coord = tileIdToCoord(action.tileId);
@@ -281,7 +341,7 @@ function validateAndApplyAction(action: PlayerAction): string | null {
             carrying: null,
           });
         }
-        // Give some starting food to prevent immediate starvation
+        // Give starting food to prevent immediate starvation
         state.resources.food = 20;
       }
       return null;
@@ -295,7 +355,7 @@ function validateAndApplyAction(action: PlayerAction): string | null {
       const b = state.buildings[bIndex];
       if (b.type === "TOWN_HALL") return "CANNOT_DEMOLISH_TOWN_HALL";
 
-      // Unassign workers
+      // Unassign all workers from this building
       b.assignedWorkerIds.forEach((id) => {
         const w = state!.workers.find((worker) => worker.id === id);
         if (w) {
@@ -311,7 +371,7 @@ function validateAndApplyAction(action: PlayerAction): string | null {
       tile.buildingId = null;
       tile.walkable = true;
 
-      // Invalidate paths
+      // Invalidate paths crossing the demolished building's tile
       state.workers.forEach((w) => {
         if (
           w.path.some((coord) => coord.y * MAP_WIDTH + coord.x === b.tileId)
@@ -330,11 +390,21 @@ function validateAndApplyAction(action: PlayerAction): string | null {
         (building) => building.id === action.buildingId,
       );
       if (!w || !b) return "INVALID_TARGETS";
-      if (!b.operational) return "BUILDING_NOT_OPERATIONAL";
       if (w.assignedBuildingId !== null) return "WORKER_ALREADY_ASSIGNED";
+
+      // Check if building is fully staffed
+      const config = BUILDING_CONFIG[b.type];
+      if (
+        config &&
+        config.requiredWorkers > 0 &&
+        b.assignedWorkerIds.length >= config.requiredWorkers
+      ) {
+        return "BUILDING_FULLY_STAFFED";
+      }
 
       w.assignedBuildingId = b.id;
       b.assignedWorkerIds.push(w.id);
+      w.state = "IDLE"; // Will transition to MOVING_TO_HARVEST on next worker eval
       w.path = [];
       return null;
     }
@@ -365,6 +435,7 @@ function validateAndApplyAction(action: PlayerAction): string | null {
       const popGate =
         ERA_POPULATION_GATES[state.era as keyof typeof ERA_POPULATION_GATES];
 
+      if (!threshold || !popGate) return "INVALID_ERA_ORDER";
       if (state.resources.knowledge < threshold)
         return "INSUFFICIENT_KNOWLEDGE";
       if (state.workers.length < popGate) return "INSUFFICIENT_POPULATION";
@@ -385,74 +456,96 @@ function processWorkerStateMachine(
 ) {
   if (worker.state === "STARVING") return;
 
-  const transition = () => {
-    switch (worker.state) {
-      case "IDLE":
-        if (worker.assignedBuildingId) {
-          worker.state = "MOVING_TO_HARVEST";
-          recalculatePath(worker);
-        }
-        break;
-
-      case "MOVING_TO_HARVEST":
-      case "MOVING_TO_DEPOSIT":
-        if (worker.path.length > 0) {
-          const next = worker.path.shift()!;
-          worker.position = next;
-          if (worker.path.length === 0) {
-            worker.state =
-              worker.state === "MOVING_TO_HARVEST"
-                ? "HARVESTING"
-                : "DEPOSITING";
-          }
-        } else {
-          // Arrived or stuck
-          worker.state =
-            worker.state === "MOVING_TO_HARVEST" ? "HARVESTING" : "DEPOSITING";
-          // Force a final position check if path was empty
-        }
-        break;
-
-      case "HARVESTING": {
-        const b = state!.buildings.find(
-          (building) => building.id === worker.assignedBuildingId,
-        );
-        if (!b || !b.operational) {
-          worker.state = "IDLE";
-          return;
-        }
-        const config = BUILDING_CONFIG[b.type];
-        if (!config.resource) {
-          worker.state = "IDLE";
-          return;
-        }
-
-        worker.harvestTicks++;
-        if (worker.harvestTicks >= config.ticksToHarvest) {
-          worker.carrying = {
-            type: config.resource as any,
-            amount: config.yieldAmount,
-          };
-          worker.harvestTicks = 0;
-          worker.state = "MOVING_TO_DEPOSIT";
-          recalculatePath(worker);
-        }
-        break;
-      }
-
-      case "DEPOSITING":
-        if (worker.carrying) {
-          const type = worker.carrying.type as keyof ResourcePool;
-          depositDelta[type] += worker.carrying.amount;
-          worker.carrying = null;
-        }
+  switch (worker.state) {
+    case "IDLE":
+      if (worker.assignedBuildingId) {
         worker.state = "MOVING_TO_HARVEST";
         recalculatePath(worker);
-        break;
-    }
-  };
+      }
+      break;
 
-  transition();
+    case "MOVING_TO_HARVEST":
+      if (worker.path.length > 0) {
+        const next = worker.path.shift()!;
+        worker.position = next;
+        if (worker.path.length === 0) {
+          worker.state = "HARVESTING";
+        }
+      } else {
+        // Path was empty — either arrived or couldn't pathfind
+        worker.state = "HARVESTING";
+      }
+      break;
+
+    case "HARVESTING": {
+      const b = state!.buildings.find(
+        (building) => building.id === worker.assignedBuildingId,
+      );
+      if (!b) {
+        worker.state = "IDLE";
+        worker.assignedBuildingId = null;
+        return;
+      }
+      const config = BUILDING_CONFIG[b.type];
+      if (!config || !config.resource) {
+        worker.state = "IDLE";
+        return;
+      }
+
+      worker.harvestTicks++;
+      if (worker.harvestTicks >= config.ticksToHarvest) {
+        worker.carrying = {
+          type: config.resource,
+          amount: config.yieldAmount,
+        };
+        worker.harvestTicks = 0;
+
+        // Check if there's capacity before trying to deposit
+        if (hasDepositCapacity(state!.resources, state!.buildings)) {
+          worker.state = "MOVING_TO_DEPOSIT";
+          recalculatePath(worker);
+        } else {
+          worker.state = "WAITING";
+        }
+      }
+      break;
+    }
+
+    case "MOVING_TO_DEPOSIT":
+      if (worker.path.length > 0) {
+        const next = worker.path.shift()!;
+        worker.position = next;
+        if (worker.path.length === 0) {
+          worker.state = "DEPOSITING";
+        }
+      } else {
+        // Check capacity on arrival
+        if (hasDepositCapacity(state!.resources, state!.buildings)) {
+          worker.state = "DEPOSITING";
+        } else {
+          worker.state = "WAITING";
+        }
+      }
+      break;
+
+    case "DEPOSITING":
+      if (worker.carrying) {
+        const type = worker.carrying.type;
+        depositDelta[type] += worker.carrying.amount;
+        worker.carrying = null;
+      }
+      worker.state = "MOVING_TO_HARVEST";
+      recalculatePath(worker);
+      break;
+
+    case "WAITING":
+      // Re-check storage capacity each tick
+      if (hasDepositCapacity(state!.resources, state!.buildings)) {
+        worker.state = "MOVING_TO_DEPOSIT";
+        recalculatePath(worker);
+      }
+      break;
+  }
 }
 
 function recalculatePath(worker: WorkerState) {
@@ -468,7 +561,7 @@ function recalculatePath(worker: WorkerState) {
     worker.state === "MOVING_TO_DEPOSIT" ||
     worker.state === "DEPOSITING"
   ) {
-    // For DEPOSIT, find closest STOREHOUSE or TOWN_HALL
+    // Find closest Storehouse or Town Hall for deposit
     const dropoffs = state.buildings.filter(
       (b) => b.type === "STOREHOUSE" || b.type === "TOWN_HALL",
     );
@@ -493,6 +586,7 @@ function recalculatePath(worker: WorkerState) {
       (worker.position.x !== targetCoord.x ||
         worker.position.y !== targetCoord.y)
     ) {
+      // No path found and not already at target
       worker.state = "IDLE";
     }
   } else {

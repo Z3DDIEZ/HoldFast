@@ -1,24 +1,43 @@
 import { create } from "zustand";
-import type { GameState, BuildingType } from "./types";
+import type {
+  GameState,
+  BuildingType,
+  ResourcePool,
+} from "../engine/tick-types";
 import type { WorkerInbound, WorkerOutbound } from "../engine/tick-types";
 import { generateMap } from "../engine/map-generator";
 
+/** Camera pan/zoom state for the canvas renderer. */
 export interface CameraState {
   zoom: number;
   offsetX: number;
   offsetY: number;
 }
 
+/** Extended game store combining engine state with UI-only fields. */
 export interface GameStore extends GameState {
+  /** Currently selected building type for placement, or null. */
   selectedBuilding: BuildingType | null;
-  saveStatus: "pending" | "synced" | "error"; // UI-only field
+  /** Save operation status for the SaveStatusIndicator. */
+  saveStatus: "pending" | "synced" | "error";
+  /** Camera pan/zoom state. */
   camera: CameraState;
+  /** Last tick's per-resource delta for ResourceBar +/- indicators. */
+  resourceDelta: ResourcePool;
+  /** Tile ID currently under the mouse cursor, or null. */
+  hoveredTileId: number | null;
+
+  // Actions
   initEngine: (seed: string) => void;
   pauseEngine: () => void;
   resumeEngine: () => void;
   selectBuilding: (type: BuildingType | null) => void;
   placeBuilding: (tileId: number) => void;
   updateCamera: (updates: Partial<CameraState>) => void;
+  setHoveredTile: (tileId: number | null) => void;
+  assignWorker: (workerId: string, buildingId: string) => void;
+  unassignWorker: (workerId: string) => void;
+  researchEra: (targetEra: 2 | 3) => void;
 }
 
 const worker = new Worker(
@@ -34,28 +53,31 @@ export const useGameStore = create<GameStore>((set, get) => {
     const event = e.data;
     switch (event.type) {
       case "TICK_RESULT":
-        set((state) => ({
-          ...state,
+        set({
           tickCount: event.tickCount,
           resources: event.resourceTotals,
-          era: event.newEra || state.era,
-          // Note: In a full implementation, we'd update workers/buildings lists properly
-          // For now, these are updated via the full TICK_RESULT if we want.
-          // The PRD says it emits TickResult.
-        }));
+          resourceDelta: event.resourceDelta,
+          era: event.newEra || get().era,
+          // Full state sync from worker
+          workers: event.workers,
+          buildings: event.buildings,
+          tiles: event.tiles,
+        });
         break;
       case "READY":
-        console.log("Engine Ready");
+        console.log("[Holdfast] Engine Ready");
         break;
       case "ACTION_REJECTED":
-        console.error("Action Rejected:", event.reason, event.action);
+        console.warn("[Holdfast] Action Rejected:", event.reason, event.action);
         break;
     }
   });
 
   return {
+    // Game state
     era: 1,
     resources: { food: 0, wood: 0, stone: 0, knowledge: 0 },
+    resourceDelta: { food: 0, wood: 0, stone: 0, knowledge: 0 },
     tickCount: 0,
     saveStatus: "synced",
     savedAt: null,
@@ -63,7 +85,10 @@ export const useGameStore = create<GameStore>((set, get) => {
     tiles: [],
     workers: [],
     buildings: [],
+
+    // UI state
     selectedBuilding: null,
+    hoveredTileId: null,
     camera: {
       zoom: 1.0,
       offsetX: 0,
@@ -98,10 +123,7 @@ export const useGameStore = create<GameStore>((set, get) => {
         savedAt,
       };
 
-      const cmd: WorkerInbound = {
-        type: "INIT",
-        state: initialState,
-      };
+      const cmd: WorkerInbound = { type: "INIT", state: initialState };
       worker.postMessage(cmd);
     },
 
@@ -131,10 +153,38 @@ export const useGameStore = create<GameStore>((set, get) => {
       set({ selectedBuilding: null });
     },
 
+    assignWorker: (workerId: string, buildingId: string) => {
+      const cmd: WorkerInbound = {
+        type: "PLAYER_ACTION",
+        action: { type: "ASSIGN_WORKER", workerId, buildingId },
+      };
+      worker.postMessage(cmd);
+    },
+
+    unassignWorker: (workerId: string) => {
+      const cmd: WorkerInbound = {
+        type: "PLAYER_ACTION",
+        action: { type: "UNASSIGN_WORKER", workerId },
+      };
+      worker.postMessage(cmd);
+    },
+
+    researchEra: (targetEra: 2 | 3) => {
+      const cmd: WorkerInbound = {
+        type: "PLAYER_ACTION",
+        action: { type: "RESEARCH_ERA", targetEra },
+      };
+      worker.postMessage(cmd);
+    },
+
     updateCamera: (updates: Partial<CameraState>) => {
       set((state) => ({
         camera: { ...state.camera, ...updates },
       }));
+    },
+
+    setHoveredTile: (tileId: number | null) => {
+      set({ hoveredTileId: tileId });
     },
   };
 });

@@ -1,20 +1,28 @@
 // NO Math.random() — simulation must be deterministic
 import type { TileCoordinate, TileState } from "./tick-types";
 
+/** Internal node used by A* pathfinding. */
 interface PathNode {
   x: number;
   y: number;
   g: number; // Cost from start
   h: number; // Heuristic to end
-  f: number; // Total cost
-  id: number; // For tie-breaking
+  f: number; // Total cost (g + h)
+  id: number; // Tile ID for deterministic tie-breaking
   parent: PathNode | null;
 }
 
+/** Manhattan distance heuristic — admissible for 4-directional movement. */
 function getManhattanDistance(a: TileCoordinate, b: TileCoordinate): number {
   return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 }
 
+/**
+ * Converts a tile coordinate to a flat tile ID.
+ * @param coord — {x, y} tile position
+ * @param mapWidth — grid width (default 80)
+ * @returns tile ID = y * mapWidth + x
+ */
 export function tileCoordToId(
   coord: TileCoordinate,
   mapWidth: number = 80,
@@ -22,6 +30,12 @@ export function tileCoordToId(
   return coord.y * mapWidth + coord.x;
 }
 
+/**
+ * Converts a flat tile ID to a tile coordinate.
+ * @param id — tile ID (row * mapWidth + col)
+ * @param mapWidth — grid width (default 80)
+ * @returns {x, y} tile position
+ */
 export function tileIdToCoord(
   id: number,
   mapWidth: number = 80,
@@ -32,6 +46,56 @@ export function tileIdToCoord(
   };
 }
 
+/**
+ * Binary search for sorted insertion position.
+ * Maintains sort by f-cost, with tile ID as deterministic tie-breaker.
+ * Returns the index at which to insert the node.
+ */
+function binaryInsertIndex(list: PathNode[], node: PathNode): number {
+  let lo = 0;
+  let hi = list.length;
+
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    const cmp = list[mid];
+    if (cmp.f < node.f || (cmp.f === node.f && cmp.id < node.id)) {
+      lo = mid + 1;
+    } else {
+      hi = mid;
+    }
+  }
+  return lo;
+}
+
+/** Insert a node into the sorted open list at the correct position. */
+function sortedInsert(list: PathNode[], node: PathNode): void {
+  const idx = binaryInsertIndex(list, node);
+  list.splice(idx, 0, node);
+}
+
+/** 4-directional movement offsets (Up, Down, Left, Right). */
+const DIRECTIONS: readonly TileCoordinate[] = [
+  { x: 0, y: -1 },
+  { x: 0, y: 1 },
+  { x: -1, y: 0 },
+  { x: 1, y: 0 },
+];
+
+/**
+ * A* pathfinding over the walkable tile graph.
+ *
+ * Path is computed once per destination change, not per tick.
+ * Results exclude the start tile and include the end tile.
+ *
+ * Tie-breaking: when two nodes have equal f-cost, the one with the
+ * lower tile ID wins (row × MAP_WIDTH + col). This ensures identical
+ * path selection across runs with the same map and inputs.
+ *
+ * @param start — starting tile coordinate
+ * @param end — destination tile coordinate
+ * @param tiles — flat tile state array (6400 entries for 80×80)
+ * @returns ordered array of TileCoordinates from start (exclusive) to end (inclusive), or empty if no path
+ */
 export function findPath(
   start: TileCoordinate,
   end: TileCoordinate,
@@ -41,6 +105,8 @@ export function findPath(
 
   const openList: PathNode[] = [];
   const closedSet = new Set<number>();
+  // Map from tile ID to node for O(1) lookup in open list
+  const openMap = new Map<number, PathNode>();
 
   const startNode: PathNode = {
     x: start.x,
@@ -53,22 +119,18 @@ export function findPath(
   };
   startNode.f = startNode.g + startNode.h;
 
-  openList.push(startNode);
+  sortedInsert(openList, startNode);
+  openMap.set(startNode.id, startNode);
 
   while (openList.length > 0) {
-    // Sort open list by f-cost, then by id for deterministic tie-breaking
-    openList.sort((a, b) => {
-      if (a.f !== b.f) return a.f - b.f;
-      return a.id - b.id;
-    });
-
+    // Pop the lowest f-cost node (already sorted — O(1) access)
     const current = openList.shift()!;
+    openMap.delete(current.id);
 
     if (current.x === end.x && current.y === end.y) {
-      // Reconstruct path
+      // Reconstruct path: start (exclusive) to end (inclusive)
       const path: TileCoordinate[] = [];
       let temp: PathNode | null = current;
-      // PRD: Returns path from start to end, excluding start, including end.
       while (temp && (temp.x !== start.x || temp.y !== start.y)) {
         path.push({ x: temp.x, y: temp.y });
         temp = temp.parent;
@@ -78,15 +140,7 @@ export function findPath(
 
     closedSet.add(current.id);
 
-    // 4-directional neighbours only
-    const directions = [
-      { x: 0, y: -1 }, // Up
-      { x: 0, y: 1 }, // Down
-      { x: -1, y: 0 }, // Left
-      { x: 1, y: 0 }, // Right
-    ];
-
-    for (const dir of directions) {
+    for (const dir of DIRECTIONS) {
       const nx = current.x + dir.x;
       const ny = current.y + dir.y;
 
@@ -97,19 +151,20 @@ export function findPath(
 
       const tile = tiles[nId];
 
-      // Rules:
-      // - A tile is walkable if tile.walkable === true AND tile.buildingId === null
-      // - Exception: the destination tile is always treated as reachable regardless of buildingId
+      // Walkability rules:
+      // - tile.walkable must be true
+      // - tile must not have a building on it (buildingId === null)
+      // - Exception: destination tile is always reachable (building entrance)
       const isEnd = nx === end.x && ny === end.y;
       const isWalkable = tile.walkable && (tile.buildingId === null || isEnd);
 
       if (!isWalkable) continue;
 
       const gScore = current.g + 1;
-      let neighborNode = openList.find((n) => n.id === nId);
+      const existing = openMap.get(nId);
 
-      if (!neighborNode) {
-        neighborNode = {
+      if (!existing) {
+        const neighborNode: PathNode = {
           x: nx,
           y: ny,
           g: gScore,
@@ -119,11 +174,18 @@ export function findPath(
           parent: current,
         };
         neighborNode.f = neighborNode.g + neighborNode.h;
-        openList.push(neighborNode);
-      } else if (gScore < neighborNode.g) {
-        neighborNode.g = gScore;
-        neighborNode.f = neighborNode.g + neighborNode.h;
-        neighborNode.parent = current;
+        sortedInsert(openList, neighborNode);
+        openMap.set(nId, neighborNode);
+      } else if (gScore < existing.g) {
+        // Remove from current position, update, re-insert sorted
+        const oldIdx = openList.indexOf(existing);
+        if (oldIdx !== -1) openList.splice(oldIdx, 1);
+
+        existing.g = gScore;
+        existing.f = existing.g + existing.h;
+        existing.parent = current;
+
+        sortedInsert(openList, existing);
       }
     }
   }

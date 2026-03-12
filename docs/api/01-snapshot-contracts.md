@@ -18,7 +18,7 @@ Initialises the validation sequence processing the serialised differential topol
 
 ```json
 {
-  "mapSeed": "df8A7x11L",
+  "mapSeed": "deterministic-seed-123",
   "tickCount": 1403,
   "era": 1,
   "resources": {
@@ -28,15 +28,38 @@ Initialises the validation sequence processing the serialised differential topol
     "knowledge": 0
   },
   "tiles": [
-    { "x": 14, "y": 21, "type": "grassland", "ownerId": "uuid-string" }
+    {
+      "id": 3281,
+      "type": "GRASSLAND",
+      "owned": true,
+      "walkable": true,
+      "visible": true,
+      "buildingId": null
+    }
   ],
   "workers": [
-    { "id": "uuid-string", "x": 14, "y": 22, "currentTask": "harvest" }
+    {
+      "id": "w-0-0",
+      "state": "HARVESTING",
+      "assignedBuildingId": "b-1-3280",
+      "position": { "x": 40, "y": 41 },
+      "path": [],
+      "harvestTicks": 2,
+      "carrying": null
+    }
   ],
   "buildings": [
-    { "id": "uuid-string", "type": "lumber_mill", "x": 15, "y": 21 }
+    {
+      "id": "b-1-3280",
+      "type": "FORAGER_HUT",
+      "tileId": 3280,
+      "tier": 1,
+      "staffed": true,
+      "operational": true,
+      "assignedWorkerIds": ["w-0-0"]
+    }
   ],
-  "savedAt": "2026-03-08T15:20:00Z"
+  "savedAt": "2026-03-12T21:20:00Z"
 }
 ```
 
@@ -62,3 +85,24 @@ Initialises the validation sequence processing the serialised differential topol
 Retrieves the most recent, mathematically evaluated `GameState` snapshot attributed unequivocally to the designated primary authentication mapping token (`userId`).
 
 **Operational Expectation**: The React front-end parses this payload and immediately hydrates the Zustand memory mapping. Furthermore, it explicitly transmits the persistent `tickCount` and the corresponding generative noise `mapSeed` directly to the Web Worker for an uninhibited, fluid re-initialisation of consecutive gameplay.
+
+## TickResult Contract (Worker → Main Thread)
+
+The Web Worker emits the following payload every 2-second tick:
+
+```typescript
+interface TickResult {
+  type: "TICK_RESULT";
+  tickCount: number;
+  resourceTotals: ResourcePool; // Absolute values post-commit
+  resourceDelta: ResourcePool; // Per-tick change (+/-)
+  workerPositions: { id; tileId; state }[];
+  buildingUpdates: { id; staffed; operational }[];
+  eraChanged: boolean;
+  newEra?: 1 | 2 | 3;
+  actionRejections: { action; reason }[];
+  workers: WorkerState[]; // Full state for UI sync
+  buildings: BuildingState[]; // Full state for UI sync
+  tiles: TileState[]; // Full state (ownership/visibility changes)
+}
+```

@@ -8,12 +8,24 @@ Entities exist as the singular kinetic agents traversing the grid structure.
 
 `WorkerState` objects encapsulate the primary mobile labour force. Each agent interprets a linear task state machine, modifying grid layouts by executing algorithmic instructions defined by the global planner.
 
-- `Idle`: The agent loops a local heuristic waiting for global queue assignment.
-- `Harvest(tileId)`: Extrapolating quantitative resource volumes from specified biome typologies adjacent to their structural base.
-- `Deposit(storageId)`: Transitioning harvested aggregates into global volumetric indices limited by generic constraints.
-- `Construct(buildingId)`: Synthesising predefined temporal vectors converting raw gathered capacities into structural topology improvements over explicit tick epochs.
+- `IDLE`: The agent loops a local heuristic waiting for global queue assignment.
+- `MOVING_TO_HARVEST`: Traversing the pathfinding graph towards the assigned building's resource node (1 tile per tick).
+- `HARVESTING`: Extracting quantitative resource volumes from the assigned building's resource type over `ticksToHarvest` ticks.
+- `MOVING_TO_DEPOSIT`: Carrying harvested resources towards the nearest Storehouse or Town Hall.
+- `DEPOSITING`: Transferring carried resources into the global resource pool (clamped to storage capacity).
+- `WAITING`: Blocked because storage capacity is full. Re-evaluates capacity each tick and transitions to `MOVING_TO_DEPOSIT` when space frees up.
+- `STARVING`: Emergency state triggered when food resources reach zero. All workers enter this state simultaneously and recover when food becomes available.
 
 Agents explicitly possess a velocity cap equating strictly to a `1-tile-per-tick` vector, compelling rigorous macro-level geographical considerations regarding resource proximities and storage logistics.
+
+### 2. Worker Assignment Rules
+
+Workers are assigned to buildings via the `ASSIGN_WORKER` action. Assignment is rejected if:
+
+- The worker is already assigned to another building.
+- The building has reached its `requiredWorkers` capacity (returned as `BUILDING_FULLY_STAFFED`).
+
+Workers can be unassigned via `UNASSIGN_WORKER`, returning them to `IDLE` state.
 
 ## The Structural Hierarchy
 
@@ -23,29 +35,42 @@ The topological footprint scales definitively through a progressive era gating s
 
 Fundamental survival and explicit extraction capabilities establish baseline indices.
 
-- **Town Hall**: The irreducible initialisation node determining absolute coordinate centralisation.
-- **Forager Hut**: Generates foundational `Food` metrics. Demands absolute contiguity with `Grassland` nodes.
-- **Lumber Mill**: Extracts structural `Wood`. Requires explicit mapping directly adjacent to `Forest` biomes.
-- **Quarry**: Sources defensive `Stone`. Necessitates direct correlation with `Stone Deposit` nodes.
-- **Storehouse**: Abstractly expands the total global capacity limits globally by absolute vector intervals (+200 units).
+| Building        | Resource | Yield                      | Harvest Ticks | Workers | Cost             |
+| --------------- | -------- | -------------------------- | ------------- | ------- | ---------------- |
+| **Town Hall**   | —        | Spawns 3 workers, +20 food | —             | 0       | Free             |
+| **Forager Hut** | Food     | 1/tick                     | 3             | 1       | 10 Wood          |
+| **Lumber Mill** | Wood     | 1/tick                     | 3             | 1       | 5 Wood, 5 Stone  |
+| **Quarry**      | Stone    | 1/tick                     | 4             | 1       | 8 Wood           |
+| **Storehouse**  | —        | +200 capacity              | —             | 0       | 15 Wood, 5 Stone |
 
 ### Era 2: The Settlement Threshold
 
-This era unlocks scalability through intensive demographic support vectors alongside abstract technological aggregation. Requires substantial quantitative structural capacity indices.
+Requires: **50 Knowledge** + **3 Workers** (player-initiated via `RESEARCH_ERA` action).
 
-- **Farm**: Replaces the Forager variant; geometrically scales `Food` generation explicitly by an x2 vector parameter.
-- **Library**: Extrapolates an abstract resource known as `Knowledge`, fundamentally required for tertiary threshold progression constraints.
+| Building    | Resource  | Yield  | Harvest Ticks | Workers | Cost              |
+| ----------- | --------- | ------ | ------------- | ------- | ----------------- |
+| **Farm**    | Food      | 2/tick | 2             | 2       | 20 Wood, 10 Stone |
+| **Library** | Knowledge | 1/tick | 5             | 1       | 25 Wood, 20 Stone |
 
 ### Era 3: Fortified Sovereign
 
-Mandates intensive structural protection methodologies mitigating theoretical catastrophic event simulations.
+Requires: **200 Knowledge** + **8 Workers**.
 
-- **Barracks**: Outputs algorithmic parameter metrics categorised as `Defence`.
-- **Walls**: Kinetic barriers impeding negative traversal logics.
+| Building     | Resource | Yield             | Harvest Ticks | Workers | Cost              |
+| ------------ | -------- | ----------------- | ------------- | ------- | ----------------- |
+| **Barracks** | —        | Defence (passive) | —             | 0       | 30 Wood, 30 Stone |
 
 ## The Resource Ontology
 
-1.  **Food**: Vitality source. Continuously drained by the `WorkerState` upkeep constraint sequence at every discrete deterministic tick.
-2.  **Wood**: The explicit structural fabrication metric consumed strictly upon structural initialisation requests.
-3.  **Stone**: Hardened fortification metric vital for Era 3 scalability logics.
-4.  **Knowledge**: Intangible heuristic pool accrued via Era 2 Libraries gating definitive scalar milestones representing profound evolution parameters.
+1. **Food**: Vitality source. Continuously drained by the `WorkerState` upkeep constraint (1 food per worker per tick). Starvation triggers `STARVING` state on all workers.
+2. **Wood**: The explicit structural fabrication metric consumed strictly upon structural initialisation requests.
+3. **Stone**: Hardened fortification metric vital for Era 2+ scalability logics.
+4. **Knowledge**: Intangible heuristic pool accrued via Era 2 Libraries. Consumed when advancing eras through the `RESEARCH_ERA` player action.
+
+## Territory & Visibility
+
+When a building is placed, `expandTerritory()` marks tiles within a 3-tile Manhattan radius as **owned** and tiles within a 5-tile radius as **visible**. The initial map generation provides a 6-tile vision radius around the center tile.
+
+- **Owned tiles** can have buildings placed on them.
+- **Visible tiles** are rendered normally; non-visible tiles render as fog-of-war.
+- Storage capacity: Base 200 + 200 per Storehouse.
