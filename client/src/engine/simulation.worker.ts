@@ -38,7 +38,9 @@ function emit(msg: WorkerOutbound) {
 
 /** Compute current storage capacity based on placed Storehouses. */
 function getStorageCapacity(buildings: BuildingState[]): number {
-  const storehouses = buildings.filter((b) => b.type === "STOREHOUSE").length;
+  const storehouses = buildings.filter(
+    (b) => b.type === "STOREHOUSE" && b.constructionTicksRemaining === 0,
+  ).length;
   return BASE_STORAGE + storehouses * STOREHOUSE_BONUS;
 }
 
@@ -55,6 +57,32 @@ function hasDepositCapacity(
     resources.stone < capacity ||
     resources.knowledge < capacity
   );
+}
+
+function assignConstructionWorkers() {
+  if (!state) return;
+
+  const idleWorkers = [...state.workers]
+    .filter((w) => w.state === "IDLE" && w.assignedBuildingId === null)
+    .sort((a, b) => a.id.localeCompare(b.id));
+  if (idleWorkers.length === 0) return;
+
+  const pendingBuildings = [...state.buildings]
+    .filter(
+      (b) => b.constructionTicksRemaining > 0 && !b.constructionWorkerId,
+    )
+    .sort((a, b) => a.id.localeCompare(b.id));
+
+  for (const building of pendingBuildings) {
+    const worker = idleWorkers.shift();
+    if (!worker) break;
+
+    worker.assignedBuildingId = building.id;
+    worker.state = "MOVING_TO_CONSTRUCT";
+    worker.path = [];
+    building.constructionWorkerId = worker.id;
+    recalculatePath(worker);
+  }
 }
 
 function runTick() {
@@ -74,6 +102,9 @@ function runTick() {
       actionRejections.push({ action, reason: rejection });
     }
   }
+
+  // Assign idle workers to construction tasks (deterministic order)
+  assignConstructionWorkers();
 
   // ─── STEP 2 — Evaluate worker state machines ───
   const workers = [...state.workers].sort((a, b) => a.id.localeCompare(b.id));
@@ -108,10 +139,13 @@ function runTick() {
     const config = BUILDING_CONFIG[b.type];
     if (!config) continue;
 
-    b.staffed = b.assignedWorkerIds.length >= config.requiredWorkers;
-    b.operational = b.staffed; // MVP rule: staffed = operational
+    const isConstructed = b.constructionTicksRemaining === 0;
+    b.staffed = isConstructed
+      ? b.assignedWorkerIds.length >= config.requiredWorkers
+      : false;
+    b.operational = isConstructed && b.staffed;
 
-    if (b.staffed && b.operational && config.resource) {
+    if (b.operational && config.resource) {
       productionDelta[config.resource] += config.yieldAmount;
     }
     buildingUpdates.push({
@@ -274,6 +308,8 @@ function validateAndApplyAction(action: PlayerAction): string | null {
         type: action.buildingType,
         tileId: action.tileId,
         tier: 1,
+        constructionTicksRemaining: config.constructionTicks,
+        constructionWorkerId: null,
         staffed: false,
         operational: false,
         assignedWorkerIds: [],
@@ -335,6 +371,16 @@ function validateAndApplyAction(action: PlayerAction): string | null {
           w.harvestTicks = 0;
         }
       });
+      // Release any construction worker assigned to this building
+      state.workers.forEach((w) => {
+        if (w.assignedBuildingId === b.id) {
+          w.assignedBuildingId = null;
+          w.state = "IDLE";
+          w.path = [];
+          w.carrying = null;
+          w.harvestTicks = 0;
+        }
+      });
 
       const tile = state.tiles[b.tileId];
       tile.buildingId = null;
@@ -360,6 +406,8 @@ function validateAndApplyAction(action: PlayerAction): string | null {
       );
       if (!w || !b) return "INVALID_TARGETS";
       if (w.assignedBuildingId !== null) return "WORKER_ALREADY_ASSIGNED";
+      if (b.constructionTicksRemaining > 0)
+        return "BUILDING_UNDER_CONSTRUCTION";
 
       // Check if building is fully staffed
       const config = BUILDING_CONFIG[b.type];
@@ -453,10 +501,77 @@ function processWorkerStateMachine(
   switch (worker.state) {
     case "IDLE":
       if (worker.assignedBuildingId) {
-        worker.state = "MOVING_TO_HARVEST";
+        const targetBuilding = state!.buildings.find(
+          (building) => building.id === worker.assignedBuildingId,
+        );
+        if (!targetBuilding) {
+          worker.assignedBuildingId = null;
+          return;
+        }
+        if (targetBuilding.constructionTicksRemaining > 0) {
+          worker.state = "MOVING_TO_CONSTRUCT";
+        } else {
+          worker.state = "MOVING_TO_HARVEST";
+        }
         recalculatePath(worker);
       }
       break;
+
+    case "MOVING_TO_CONSTRUCT":
+      if (worker.path.length > 0) {
+        const next = worker.path.shift()!;
+        worker.position = next;
+        if (worker.path.length === 0) {
+          worker.state = "CONSTRUCTING";
+        }
+      } else {
+        const targetBuilding = state!.buildings.find(
+          (building) => building.id === worker.assignedBuildingId,
+        );
+        if (!targetBuilding) {
+          worker.state = "IDLE";
+          worker.assignedBuildingId = null;
+          return;
+        }
+        const targetCoord = tileIdToCoord(targetBuilding.tileId);
+        if (
+          worker.position.x === targetCoord.x &&
+          worker.position.y === targetCoord.y
+        ) {
+          worker.state = "CONSTRUCTING";
+        } else {
+          targetBuilding.constructionWorkerId = null;
+          worker.state = "IDLE";
+          worker.assignedBuildingId = null;
+        }
+      }
+      break;
+
+    case "CONSTRUCTING": {
+      const b = state!.buildings.find(
+        (building) => building.id === worker.assignedBuildingId,
+      );
+      if (!b) {
+        worker.state = "IDLE";
+        worker.assignedBuildingId = null;
+        return;
+      }
+      if (b.constructionTicksRemaining > 0) {
+        b.constructionTicksRemaining = Math.max(
+          0,
+          b.constructionTicksRemaining - 1,
+        );
+      }
+      if (b.constructionTicksRemaining === 0) {
+        b.constructionWorkerId = null;
+        worker.state = "IDLE";
+        worker.assignedBuildingId = null;
+        worker.path = [];
+        worker.carrying = null;
+        worker.harvestTicks = 0;
+      }
+      break;
+    }
 
     case "MOVING_TO_HARVEST":
       if (worker.path.length > 0) {
@@ -476,6 +591,11 @@ function processWorkerStateMachine(
         (building) => building.id === worker.assignedBuildingId,
       );
       if (!b) {
+        worker.state = "IDLE";
+        worker.assignedBuildingId = null;
+        return;
+      }
+      if (b.constructionTicksRemaining > 0) {
         worker.state = "IDLE";
         worker.assignedBuildingId = null;
         return;
@@ -546,7 +666,12 @@ function recalculatePath(worker: WorkerState) {
   if (!state) return;
 
   let targetId: number | null = null;
-  if (worker.state === "MOVING_TO_HARVEST" || worker.state === "HARVESTING") {
+  if (
+    worker.state === "MOVING_TO_HARVEST" ||
+    worker.state === "HARVESTING" ||
+    worker.state === "MOVING_TO_CONSTRUCT" ||
+    worker.state === "CONSTRUCTING"
+  ) {
     const b = state.buildings.find(
       (building) => building.id === worker.assignedBuildingId,
     );
@@ -557,7 +682,9 @@ function recalculatePath(worker: WorkerState) {
   ) {
     // Find closest Storehouse or Town Hall for deposit
     const dropoffs = state.buildings.filter(
-      (b) => b.type === "STOREHOUSE" || b.type === "TOWN_HALL",
+      (b) =>
+        (b.type === "STOREHOUSE" || b.type === "TOWN_HALL") &&
+        b.constructionTicksRemaining === 0,
     );
     let minDist = Infinity;
     for (const d of dropoffs) {

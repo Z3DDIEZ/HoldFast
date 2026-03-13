@@ -28,6 +28,8 @@ const ERA_REQUIREMENTS = {
 /** Worker state display colours. */
 const WORKER_STATE_COLORS: Record<string, string> = {
   IDLE: "#888870",
+  MOVING_TO_CONSTRUCT: "#c8a020",
+  CONSTRUCTING: "#c8a020",
   MOVING_TO_HARVEST: "#4a8f3f",
   HARVESTING: "#c8a020",
   MOVING_TO_DEPOSIT: "#6a60c0",

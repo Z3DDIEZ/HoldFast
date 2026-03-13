@@ -154,6 +154,7 @@ function App() {
   const canAssignToBuilding =
     hoveredBuilding &&
     hoveredBuildingConfig &&
+    hoveredBuilding.constructionTicksRemaining === 0 &&
     hoveredBuildingConfig.requiredWorkers > 0 &&
     hoveredBuildingConfig.resource;
   const availableSlots = canAssignToBuilding
@@ -172,6 +173,13 @@ function App() {
         ? `${assignedWorkerIds.length}/${hoveredBuildingConfig.requiredWorkers} staffed`
         : "No staffing required"
       : "";
+  const buildingStatus = hoveredBuilding
+    ? hoveredBuilding.constructionTicksRemaining > 0
+      ? `CONSTRUCTING (${hoveredBuilding.constructionTicksRemaining}t)`
+      : hoveredBuilding.operational
+        ? "OPERATIONAL"
+        : "IDLE"
+    : "";
 
   const showTooltip =
     hoveredTile &&
@@ -227,6 +235,11 @@ function App() {
             <span style={{ color: "#555550", fontSize: "7px" }}>
               {staffingLabel}
             </span>
+            {hoveredBuilding.constructionTicksRemaining > 0 && (
+              <span style={{ color: "#c8a020", fontSize: "7px" }}>
+                {buildingStatus}
+              </span>
+            )}
           </div>
 
           <div className="flex justify-between">
@@ -417,7 +430,7 @@ function App() {
               </span>
               <div className="flex gap-2">
                 <span style={{ color: "#888870", fontSize: "6px" }}>
-                  {hoveredBuilding.operational ? "OPERATIONAL" : "IDLE"}
+                  {buildingStatus}
                 </span>
                 <span style={{ color: "#888870", fontSize: "6px" }}>
                   {hoveredBuilding.assignedWorkerIds.length} workers

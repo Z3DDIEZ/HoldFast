@@ -95,21 +95,76 @@ export function generateMap(seed: string): TileState[] {
       // Center tile is always grassland and owned
       const isCenter = row === CENTER_Y && col === CENTER_X;
 
-      // Starting visibility — tiles near center are visible
-      const visible = distFromCenter <= INITIAL_VISION_RADIUS;
-
       tiles.push({
         id,
         type: isCenter ? "GRASSLAND" : type,
         owned: isCenter,
         walkable,
-        visible,
+        visible: false,
         buildingId: null,
       });
     }
   }
 
+  // Starting visibility with forest line-of-sight blocking
+  for (const tile of tiles) {
+    const coord = { x: tile.id % MAP_WIDTH, y: Math.floor(tile.id / MAP_WIDTH) };
+    const dist =
+      Math.abs(coord.x - CENTER_X) + Math.abs(coord.y - CENTER_Y);
+    if (dist <= INITIAL_VISION_RADIUS) {
+      tile.visible = hasLineOfSight(
+        tiles,
+        CENTER_X,
+        CENTER_Y,
+        coord.x,
+        coord.y,
+      );
+    }
+  }
+
   return tiles;
+}
+
+function hasLineOfSight(
+  tiles: TileState[],
+  fromX: number,
+  fromY: number,
+  toX: number,
+  toY: number,
+): boolean {
+  let x0 = fromX;
+  let y0 = fromY;
+  const x1 = toX;
+  const y1 = toY;
+
+  const dx = Math.abs(x1 - x0);
+  const dy = Math.abs(y1 - y0);
+  const sx = x0 < x1 ? 1 : -1;
+  const sy = y0 < y1 ? 1 : -1;
+  let err = dx - dy;
+
+  while (!(x0 === x1 && y0 === y1)) {
+    const e2 = err * 2;
+    if (e2 > -dy) {
+      err -= dy;
+      x0 += sx;
+    }
+    if (e2 < dx) {
+      err += dx;
+      y0 += sy;
+    }
+
+    if (x0 === x1 && y0 === y1) {
+      break;
+    }
+
+    const idx = y0 * MAP_WIDTH + x0;
+    if (tiles[idx]?.type === "FOREST") {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 /**
@@ -147,7 +202,9 @@ export function expandTerritory(
         tile.owned = true;
       }
       if (dist <= visionRadius) {
-        tile.visible = true;
+        if (hasLineOfSight(tiles, cx, cy, nx, ny)) {
+          tile.visible = true;
+        }
       }
     }
   }

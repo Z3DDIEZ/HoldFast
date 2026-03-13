@@ -27,6 +27,13 @@ interface ActionAlert {
   message: string;
 }
 
+const STARTER_RESOURCES: ResourcePool = {
+  food: 30,
+  wood: 35,
+  stone: 5,
+  knowledge: 0,
+};
+
 const ACTION_REJECTION_MESSAGES: Record<string, string> = {
   TILE_NOT_FOUND: "Tile not found.",
   TILE_INVALID: "Cannot place building on that tile.",
@@ -39,6 +46,7 @@ const ACTION_REJECTION_MESSAGES: Record<string, string> = {
   CANNOT_DEMOLISH_TOWN_HALL: "Town Hall cannot be demolished.",
   INVALID_TARGETS: "Invalid worker or building.",
   WORKER_ALREADY_ASSIGNED: "Worker already assigned.",
+  BUILDING_UNDER_CONSTRUCTION: "Building is still under construction.",
   BUILDING_NOT_ASSIGNABLE: "Building cannot take workers.",
   BUILDING_FULLY_STAFFED: "Building is fully staffed.",
   NOT_ASSIGNED: "Worker is not assigned.",
@@ -190,6 +198,8 @@ export const useGameStore = create<GameStore>((set, get) => {
             type: "TOWN_HALL",
             tileId: centerTileId,
             tier: 1,
+            constructionTicksRemaining: 0,
+            constructionWorkerId: null,
             staffed: false,
             operational: false,
             assignedWorkerIds: [],
@@ -211,8 +221,13 @@ export const useGameStore = create<GameStore>((set, get) => {
           }));
 
           initialResources = {
-            ...initialResources,
-            food: Math.max(initialResources.food, 20),
+            food: Math.max(initialResources.food, STARTER_RESOURCES.food),
+            wood: Math.max(initialResources.wood, STARTER_RESOURCES.wood),
+            stone: Math.max(initialResources.stone, STARTER_RESOURCES.stone),
+            knowledge: Math.max(
+              initialResources.knowledge,
+              STARTER_RESOURCES.knowledge,
+            ),
           };
         }
       }

@@ -86,6 +86,8 @@ const ADJACENT_BIOME_REQUIREMENTS: Partial<Record<BuildingType, TileType>> = {
 /** Worker colours per state. */
 const WORKER_STATE_COLORS: Record<string, string> = {
   IDLE: "#ffffff",
+  MOVING_TO_CONSTRUCT: "#c8a020",
+  CONSTRUCTING: "#c8a020",
   MOVING_TO_HARVEST: "#40d0d0",
   HARVESTING: "#c8a020",
   MOVING_TO_DEPOSIT: "#40d0d0",
@@ -329,7 +331,12 @@ export class CanvasRenderer {
       const inset = Math.max(2, this.currentTileSize * 0.1);
 
       // Building fill
-      ctx.fillStyle = building.operational ? bColors.fill : `${bColors.fill}88`;
+      const isUnderConstruction = building.constructionTicksRemaining > 0;
+      ctx.fillStyle = isUnderConstruction
+        ? `${bColors.fill}55`
+        : building.operational
+          ? bColors.fill
+          : `${bColors.fill}88`;
       ctx.fillRect(
         px + inset,
         py + inset,

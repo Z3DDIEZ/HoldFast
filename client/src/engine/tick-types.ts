@@ -71,6 +71,10 @@ export interface BuildingState {
   tileId: number;
   /** Building upgrade tier (1/2/3). */
   tier: 1 | 2 | 3;
+  /** Remaining ticks to complete construction (0 = fully built). */
+  constructionTicksRemaining: number;
+  /** Worker currently constructing this building, or null. */
+  constructionWorkerId: string | null;
   /** Whether the building has enough assigned workers to operate. */
   staffed: boolean;
   /** Whether the building is actively producing (requires staffed = true in MVP). */
@@ -85,6 +89,8 @@ export interface BuildingState {
  */
 export type WorkerAgentState =
   | "IDLE"
+  | "MOVING_TO_CONSTRUCT"
+  | "CONSTRUCTING"
   | "MOVING_TO_HARVEST"
   | "HARVESTING"
   | "MOVING_TO_DEPOSIT"

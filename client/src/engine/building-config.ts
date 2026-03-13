@@ -6,6 +6,7 @@ export interface BuildingConfig {
   resource: ResourceType | null;
   ticksToHarvest: number;
   yieldAmount: number;
+  constructionTicks: number;
   requiredWorkers: number;
   requiredEra: 1 | 2 | 3;
   cost: Partial<ResourcePool>;
@@ -18,6 +19,7 @@ export const BUILDING_CONFIG: Record<BuildingType, BuildingConfig> = {
     resource: null,
     ticksToHarvest: 0,
     yieldAmount: 0,
+    constructionTicks: 0,
     requiredWorkers: 0,
     requiredEra: 1,
     cost: {},
@@ -28,6 +30,7 @@ export const BUILDING_CONFIG: Record<BuildingType, BuildingConfig> = {
     resource: "food",
     ticksToHarvest: 3,
     yieldAmount: 1,
+    constructionTicks: 3,
     requiredWorkers: 1,
     requiredEra: 1,
     cost: { wood: 10 },
@@ -38,6 +41,7 @@ export const BUILDING_CONFIG: Record<BuildingType, BuildingConfig> = {
     resource: "wood",
     ticksToHarvest: 3,
     yieldAmount: 1,
+    constructionTicks: 3,
     requiredWorkers: 1,
     requiredEra: 1,
     cost: { wood: 5, stone: 5 },
@@ -48,6 +52,7 @@ export const BUILDING_CONFIG: Record<BuildingType, BuildingConfig> = {
     resource: "stone",
     ticksToHarvest: 4,
     yieldAmount: 1,
+    constructionTicks: 3,
     requiredWorkers: 1,
     requiredEra: 1,
     cost: { wood: 8 },
@@ -58,6 +63,7 @@ export const BUILDING_CONFIG: Record<BuildingType, BuildingConfig> = {
     resource: null,
     ticksToHarvest: 0,
     yieldAmount: 0,
+    constructionTicks: 4,
     requiredWorkers: 0,
     requiredEra: 1,
     cost: { wood: 15, stone: 5 },
@@ -68,6 +74,7 @@ export const BUILDING_CONFIG: Record<BuildingType, BuildingConfig> = {
     resource: "food",
     ticksToHarvest: 2,
     yieldAmount: 2,
+    constructionTicks: 4,
     requiredWorkers: 2,
     requiredEra: 2,
     cost: { wood: 20, stone: 10 },
@@ -78,6 +85,7 @@ export const BUILDING_CONFIG: Record<BuildingType, BuildingConfig> = {
     resource: "knowledge",
     ticksToHarvest: 5,
     yieldAmount: 1,
+    constructionTicks: 5,
     requiredWorkers: 1,
     requiredEra: 2,
     cost: { wood: 25, stone: 20 },
@@ -88,6 +96,7 @@ export const BUILDING_CONFIG: Record<BuildingType, BuildingConfig> = {
     resource: null,
     ticksToHarvest: 0,
     yieldAmount: 0,
+    constructionTicks: 6,
     requiredWorkers: 0,
     requiredEra: 3,
     cost: { wood: 30, stone: 30 },
