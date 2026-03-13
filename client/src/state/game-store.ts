@@ -38,6 +38,7 @@ export interface GameStore extends GameState {
   assignWorker: (workerId: string, buildingId: string) => void;
   unassignWorker: (workerId: string) => void;
   researchEra: (targetEra: 2 | 3) => void;
+  spawnWorker: () => void;
 }
 
 const worker = new Worker(
@@ -173,6 +174,14 @@ export const useGameStore = create<GameStore>((set, get) => {
       const cmd: WorkerInbound = {
         type: "PLAYER_ACTION",
         action: { type: "RESEARCH_ERA", targetEra },
+      };
+      worker.postMessage(cmd);
+    },
+
+    spawnWorker: () => {
+      const cmd: WorkerInbound = {
+        type: "PLAYER_ACTION",
+        action: { type: "SPAWN_WORKER" },
       };
       worker.postMessage(cmd);
     },

@@ -151,7 +151,8 @@ export type PlayerAction =
   | { type: "DEMOLISH_BUILDING"; buildingId: string }
   | { type: "ASSIGN_WORKER"; workerId: string; buildingId: string }
   | { type: "UNASSIGN_WORKER"; workerId: string }
-  | { type: "RESEARCH_ERA"; targetEra: 2 | 3 };
+  | { type: "RESEARCH_ERA"; targetEra: 2 | 3 }
+  | { type: "SPAWN_WORKER" };
 
 /**
  * Delta emitted from the Web Worker to the main thread each tick.

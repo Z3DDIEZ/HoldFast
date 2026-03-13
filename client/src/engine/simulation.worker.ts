@@ -288,6 +288,44 @@ function validateAndApplyAction(action: PlayerAction): string | null {
       if (!config) return "UNKNOWN_BUILDING_TYPE";
       if (state.era < config.requiredEra) return "ERA_LOCKED";
 
+      // Adjacency Validation
+      if (
+        action.buildingType === "FORAGER_HUT" ||
+        action.buildingType === "LUMBER_MILL" ||
+        action.buildingType === "QUARRY"
+      ) {
+        const cx = action.tileId % MAP_WIDTH;
+        const cy = Math.floor(action.tileId / MAP_WIDTH);
+        let hasRequiredAdjacency = false;
+
+        const targetBiome =
+          action.buildingType === "FORAGER_HUT"
+            ? "GRASSLAND"
+            : action.buildingType === "LUMBER_MILL"
+              ? "FOREST"
+              : "STONE_DEPOSIT";
+
+        // Check N, S, E, W
+        const neighbors = [
+          { x: cx, y: cy - 1 },
+          { x: cx, y: cy + 1 },
+          { x: cx - 1, y: cy },
+          { x: cx + 1, y: cy },
+        ];
+
+        for (const n of neighbors) {
+          if (n.x >= 0 && n.x < MAP_WIDTH && n.y >= 0 && n.y < MAP_WIDTH) {
+            const nId = n.y * MAP_WIDTH + n.x;
+            if (state.tiles[nId]?.type === targetBiome) {
+              hasRequiredAdjacency = true;
+              break;
+            }
+          }
+        }
+
+        if (!hasRequiredAdjacency) return "MISSING_ADJACENT_BIOME";
+      }
+
       // Check costs
       const cost = config.cost;
       for (const r of Object.keys(cost) as (keyof ResourcePool)[]) {
@@ -442,6 +480,28 @@ function validateAndApplyAction(action: PlayerAction): string | null {
 
       state.resources.knowledge -= threshold;
       state.era = action.targetEra;
+      return null;
+    }
+
+    case "SPAWN_WORKER": {
+      if (state.resources.food < 50) return "INSUFFICIENT_FOOD";
+      
+      const townHall = state.buildings.find((b) => b.type === "TOWN_HALL");
+      if (!townHall) return "TOWN_HALL_MISSING";
+
+      state.resources.food -= 50;
+      
+      const coord = tileIdToCoord(townHall.tileId);
+      state.workers.push({
+        id: `w-${state.tickCount}-${state.workers.length}`,
+        state: "IDLE",
+        assignedBuildingId: null,
+        position: { ...coord },
+        path: [],
+        harvestTicks: 0,
+        carrying: null,
+      });
+      
       return null;
     }
 

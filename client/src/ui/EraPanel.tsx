@@ -45,6 +45,8 @@ export function EraPanel() {
   const resources = useGameStore((s) => s.resources);
   const workers = useGameStore((s) => s.workers);
   const researchEra = useGameStore((s) => s.researchEra);
+  const spawnWorker = useGameStore((s) => s.spawnWorker);
+  const hasTownHall = useGameStore((s) => s.buildings.some((b) => b.type === "TOWN_HALL"));
 
   const info = ERA_INFO[era];
   const isMaxEra = era === 3;
@@ -179,6 +181,23 @@ export function EraPanel() {
           <span style={{ color: "#555550", fontSize: "7px" }}>
             Place Town Hall to start
           </span>
+        )}
+        
+        {hasTownHall && (
+          <button
+            className={`mt-1 w-full py-1 border text-center transition-all ${
+              resources.food >= 50
+                ? "border-[#4a8f3f] bg-[#4a8f3f]/20 hover:bg-[#4a8f3f]/40 cursor-pointer"
+                : "border-[#2a2a2a] bg-transparent opacity-40 cursor-not-allowed"
+            }`}
+            style={{ fontSize: "8px", color: resources.food >= 50 ? "#e8e8d0" : "#888870" }}
+            onClick={() => {
+              if (resources.food >= 50) spawnWorker();
+            }}
+            disabled={resources.food < 50}
+          >
+            SPAWN WORKER (50 FOOD)
+          </button>
         )}
       </div>
 
