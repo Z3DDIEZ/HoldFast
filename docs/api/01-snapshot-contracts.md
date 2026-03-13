@@ -2,7 +2,7 @@
 
 ## The Persistence Paradigm
 
-Holdfast mandates a strictly deterministic state serialisation protocol bridging the untrusted simulation context (the Web Worker execution) and the absolute persistent authority (the PostgreSQL relational structure via Entity Framework Core). The mechanism relies entirely upon defined, stateless, asynchronous HTTP requests representing structured data schemas.
+Holdfast mandates a deterministic state serialisation protocol bridging the untrusted simulation context (the Web Worker execution) and the absolute persistent authority. The mechanism relies on defined, stateless, asynchronous HTTP requests representing structured data schemas.
 
 ### The Immutable Boundary
 
@@ -54,19 +54,21 @@ Initialises the validation sequence processing the serialised differential topol
       "type": "FORAGER_HUT",
       "tileId": 3280,
       "tier": 1,
+      "constructionTicksRemaining": 0,
+      "constructionWorkerId": null,
       "staffed": true,
       "operational": true,
       "assignedWorkerIds": ["w-0-0"]
     }
   ],
-  "savedAt": "2026-03-12T21:20:00Z"
+  "savedAt": null
 }
 ```
 
 **Synchronous Response Models**:
 
-- `201 Created`: The mathematical assertions passed validation logic. The database transaction committed the geometry completely.
-- `422 Unprocessable Entity`: The invariant constraints mathematically failed logic boundaries. The server rejects the structural payload completely without database pollution.
+- `201 Created`: The mathematical assertions passed validation logic. The snapshot is accepted and stamped with `savedAt` on the server.
+- `422 Unprocessable Entity`: The invariant constraints failed. The server rejects the payload completely without persistence pollution.
 
 ```json
 {
@@ -74,7 +76,7 @@ Initialises the validation sequence processing the serialised differential topol
   "violations": [
     {
       "rule": "ResourceCap",
-      "detail": "Wood 320 exceeds computed quantitative maximum 280 bounds determined at chronometric tick 1403."
+      "detail": "Wood 320 exceeds computed quantitative maximum 280 bounds determined at tick 1403."
     }
   ]
 }
@@ -82,13 +84,13 @@ Initialises the validation sequence processing the serialised differential topol
 
 ### 2. `GET /api/saves/{userId}/latest`
 
-Retrieves the most recent, mathematically evaluated `GameState` snapshot attributed unequivocally to the designated primary authentication mapping token (`userId`).
+Retrieves the most recent, validated `GameState` snapshot attributed to the designated `userId`.
 
-**Operational Expectation**: The React front-end parses this payload and immediately hydrates the Zustand memory mapping. Furthermore, it explicitly transmits the persistent `tickCount` and the corresponding generative noise `mapSeed` directly to the Web Worker for an uninhibited, fluid re-initialisation of consecutive gameplay.
+**Operational Expectation**: The React front-end hydrates Zustand and re-seeds the Web Worker with the restored `tickCount` and `mapSeed`.
 
-## TickResult Contract (Worker → Main Thread)
+## TickResult Contract (Worker -> Main Thread)
 
-The Web Worker emits the following payload every 2-second tick:
+The Web Worker emits the following payload every tick:
 
 ```typescript
 interface TickResult {

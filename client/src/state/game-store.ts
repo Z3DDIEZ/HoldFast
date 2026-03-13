@@ -81,11 +81,14 @@ export interface GameStore extends GameState {
   actionAlerts: ActionAlert[];
   /** Current simulation speed multiplier (1x, 2x, 5x, 10x, 100x). */
   simSpeed: number;
+  /** Whether the simulation is currently paused. */
+  isPaused: boolean;
 
   // Actions
   initEngine: (seed: string) => void;
   pauseEngine: () => void;
   resumeEngine: () => void;
+  togglePause: () => void;
   selectBuilding: (type: BuildingType | null) => void;
   placeBuilding: (tileId: number) => void;
   demolishBuilding: (buildingId: string) => void;
@@ -172,6 +175,7 @@ export const useGameStore = create<GameStore>((set, get) => {
     hoveredTileId: null,
     actionAlerts: [],
     simSpeed: 1,
+    isPaused: false,
     camera: {
       zoom: 1.0,
       offsetX: 0,
@@ -268,11 +272,26 @@ export const useGameStore = create<GameStore>((set, get) => {
     pauseEngine: () => {
       const cmd: WorkerInbound = { type: "PAUSE" };
       worker.postMessage(cmd);
+      set({ isPaused: true });
     },
 
     resumeEngine: () => {
       const cmd: WorkerInbound = { type: "RESUME" };
       worker.postMessage(cmd);
+      set({ isPaused: false });
+    },
+
+    togglePause: () => {
+      const paused = get().isPaused;
+      if (paused) {
+        const cmd: WorkerInbound = { type: "RESUME" };
+        worker.postMessage(cmd);
+        set({ isPaused: false });
+      } else {
+        const cmd: WorkerInbound = { type: "PAUSE" };
+        worker.postMessage(cmd);
+        set({ isPaused: true });
+      }
     },
 
     selectBuilding: (type: BuildingType | null) => {

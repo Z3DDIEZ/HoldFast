@@ -1,27 +1,28 @@
-# Core Mechanics & Heuristics
+# Core Mechanics
 
-## The Settlement Builder Paradigm
+## 1. Simulation Tempo
 
-Holdfast embodies a highly deliberate strategic framework designed to remove the burden of granular micromanagement whilst retaining maximum administrative autonomy. The system provides an 8-bit visual interpretation of a procedurally orchestrated environment, driven by deterministic rulesets.
+The deterministic game tick runs every 2 seconds by default. Players can change the speed (1x-100x) and pause/resume the loop without resetting the simulation.
 
-### 1. The Procedural Matrix (The Map)
+## 2. Construction
 
-The foundational substrate of the simulation is a strict 80-by-80 Cartesian coordinate plane. This grid evaluates topographical variations through algorithmically instantiated noise sequences.
+Building placement initiates a construction phase. A worker is assigned to construct the building, and `constructionTicksRemaining` counts down to 0 before the building becomes operational.
 
-- **Generative Noise**: Topologies are sculpted via a 2D Simplex Noise algorithm. This yields clusters of distinctive biomes which inherently simulate natural landscape formations rather than purely randomised static.
-- **Biome Typologies**: Valid nodes classify into fundamental typologies determining their traverse costs and resource capacities:
-  - `Grassland`: The primary traversal and foundational biome for baseline agriculture.
-  - `Forest`: An opaque structure blocking vision logic; provides arboreal resource nodes.
-  - `Stone Deposit`: Rare outcroppings critical for later-tier structural fortification.
-  - `Water`: Naturally impassable without specific technological unlock vectors.
-  - `Barren`: Sub-optimal grids presenting spatial challenges for structural placement without yielding core resources.
+## 3. Worker Tasks
 
-### 2. The Visibility Heuristic (Fog of War)
+Workers execute a linear state machine:
 
-Exploration is an active mechanical component tied inherently to population metrics and structural deployment.
-The grid begins entirely obscured by an opaque shroud logic. As the primary settlement structure (`Town Hall`) establishes its baseline, a spherical revelation algorithm exposes proximal grids. Subsequent expansions, particularly defensive infrastructure or population saturation, deterministically push this visibility bound outward uncovering disparate resource deposit zones.
+- **IDLE**: Waiting for assignment.
+- **MOVING_TO_CONSTRUCT / CONSTRUCTING**: Building new structures.
+- **MOVING_TO_HARVEST / HARVESTING**: Gathering resources from assigned buildings.
+- **MOVING_TO_DEPOSIT / DEPOSITING**: Delivering resources to Town Hall or Storehouse.
+- **WAITING**: Paused due to full storage.
+- **STARVING**: Entered when food upkeep cannot be met (after the grace period ends).
 
-### 3. The Autonomous Tick Implementation
+## 4. Starvation Guard
 
-Mechanical progression unfolds arbitrarily without direct player interaction.
-A chronometrically rigorous 'tick cycle' (executing definitively every 2000 milliseconds) forms the basis of chronological movement. During each cycle, the internal processor interpolates logistical routines, extrapolates production scaling multipliers, and executes predefined node traversals for all instantiated operational entities. Players exist fundamentally as architects: assigning zoning requests and declaring overarching strategic milestones enacted upon successive ticks by the autonomous entity cohort.
+Food upkeep and starvation only activate after an operational food producer exists. Before that point, upkeep is 0 and STARVING is cleared.
+
+## 5. Storage Capacity
+
+Base capacity is 200 units per resource type. Each Storehouse adds +200.

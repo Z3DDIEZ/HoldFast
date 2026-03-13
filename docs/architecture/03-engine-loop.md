@@ -2,42 +2,41 @@
 
 ## Simulation Constraints & Web Worker Orchestration
 
-To establish an autonomous, persistent idle strategic paradigm, Holdfast segregates UI responsiveness from mechanical resolution. The mathematical simulation occurs strictly upon the client device but within a partitioned thread heuristic, guaranteeing 60FPS interaction paradigms regardless of simulation complexity or procedural evaluation scaling.
+Holdfast segregates UI responsiveness from mechanical resolution. The mathematical simulation occurs within a Web Worker, guaranteeing smooth interaction regardless of simulation complexity.
 
 ### 1. Web Worker Instantiation
 
-The simulation locus rests unilaterally within `engine/simulation.worker.ts`. The primary `App` bootstrap initialises this background processor upon DOM readiness. Communication traverses the boundary solely via high-throughput, structured `postMessage` implementations.
+The simulation locus rests within `engine/simulation.worker.ts`. The primary App bootstrap initialises this background processor on load. Communication traverses the boundary via structured `postMessage` payloads.
 
-### 2. The Deterministic Tick Pipeline
+### 2. Deterministic Tick Pipeline
 
-The core kinetic progression is dictated by a deterministic interval processing cycle, executing exactly every 2000 milliseconds (the 'Game Tick').
+The core progression executes every 2000 milliseconds (base tick). A speed multiplier (1x-100x) adjusts the interval, and pause/resume halts or restarts the loop without resetting speed.
 
-During each tick iteration, the Worker algorithmically asserts the following sequential block:
+During each tick iteration, the Worker asserts the following sequence:
 
-1. **Action Queue Drain (Step 1)**: All player-submitted actions (`PLACE_BUILDING`, `DEMOLISH_BUILDING`, `ASSIGN_WORKER`, `UNASSIGN_WORKER`, `RESEARCH_ERA`) are drained from the FIFO queue and validated. Invalid actions are rejected with specific reason codes. Building placement triggers `expandTerritory()` to claim adjacent tiles (3-tile ownership, 5-tile vision radius).
-2. **Worker State Machine Evaluation (Step 2)**: Iterates over every allocated `WorkerState` object (deterministically sorted by ID). Each agent interprets the immediate internal state machine transition:
-   - `IDLE → MOVING_TO_HARVEST` (when assigned to a building)
-   - `MOVING_TO_HARVEST → HARVESTING` (on arrival at assigned building)
-   - `HARVESTING → MOVING_TO_DEPOSIT` (when harvest ticks complete and storage capacity available)
-   - `HARVESTING → WAITING` (when harvest complete but no storage capacity)
-   - `MOVING_TO_DEPOSIT → DEPOSITING` (on arrival at deposit point)
-   - `DEPOSITING → MOVING_TO_HARVEST` (cycle repeats)
-   - `WAITING → MOVING_TO_DEPOSIT` (when capacity frees up)
-   - Any state → `STARVING` (when food reaches zero)
-3. **Production Evaluation (Step 3)**: Calculates building staffing status and operational state. Staffed buildings with resource configurations generate production deltas.
-4. **Consumption (Step 4)**: Worker food upkeep (1 food per worker per tick) is deducted. If net food would go negative, all workers enter `STARVING` state.
-5. **Delta Commit (Step 5)**: Combined production deltas, deposit deltas, and consumption are committed to the resource pool, clamped to storage capacity (base 200 + 200 per Storehouse).
-6. **Era Progression (Step 6)**: Reserved for future passive triggers. Currently, era advancement is player-initiated through the `RESEARCH_ERA` action processed in Step 1.
-7. **TickResult Emission (Step 7)**: Bundles the complete computed delta — including full `workers`, `buildings`, and `tiles` arrays — into the `TickResult` payload and signals the primary thread.
+1. **Action Queue Drain (Step 1)**: Player-submitted actions (`PLACE_BUILDING`, `DEMOLISH_BUILDING`, `ASSIGN_WORKER`, `UNASSIGN_WORKER`, `RESEARCH_ERA`, `SPAWN_WORKER`) are drained FIFO and validated. Building placement triggers `expandTerritory()` to claim adjacent tiles (3-tile ownership, 5-tile vision radius).
+2. **Construction Assignment (Step 2)**: Idle workers are deterministically assigned to buildings under construction.
+3. **Worker State Machine Evaluation (Step 3)**: Each `WorkerState` transitions through its task loop:
+   - `IDLE -> MOVING_TO_CONSTRUCT -> CONSTRUCTING`
+   - `IDLE -> MOVING_TO_HARVEST -> HARVESTING`
+   - `HARVESTING -> MOVING_TO_DEPOSIT` (when harvest complete and storage has capacity)
+   - `HARVESTING -> WAITING` (when harvest complete but no storage capacity)
+   - `MOVING_TO_DEPOSIT -> DEPOSITING -> MOVING_TO_HARVEST`
+   - `WAITING -> MOVING_TO_DEPOSIT` (when capacity frees up)
+4. **Production Evaluation (Step 4)**: Calculates staffing and operational state. Staffed buildings with resource configurations generate production deltas.
+5. **Consumption (Step 5)**: Worker food upkeep (1 food per worker per tick) is deducted only once an operational food producer exists. Otherwise upkeep is 0 and STARVING is cleared (grace period).
+6. **Delta Commit (Step 6)**: Combined production, deposit deltas, and consumption are committed to the resource pool, clamped to storage capacity (base 200 + 200 per Storehouse).
+7. **Era Progression (Step 7)**: Currently player-initiated via `RESEARCH_ERA` in Step 1.
+8. **TickResult Emission (Step 8)**: Bundles the computed delta - including full `workers`, `buildings`, and `tiles` arrays - into the `TickResult` payload.
 
 ### 3. Zustand Rehydration
 
-The main thread receives the `TickResult` data block. The Zustand `game-store` applies full state sync: resource totals, resource deltas, workers (with positions, states, carrying status), buildings (with staffing, operational), tiles (with ownership, visibility), and era state. This drives both the Canvas renderer and the React HUD components.
+The main thread receives `TickResult` and applies full state sync: resource totals, deltas, workers, buildings, tiles, and era state. This drives the Canvas renderer and React HUD components.
 
 ### 4. Thread Safety & Temporal Predictability
 
-Because operations are sequentially batched via specific messaging routines, race conditions inherent typically to mutable shared state paradigms are eradicated. If a user defines an operational command (e.g., executing structural placement), a `PLAYER_ACTION` message propagates from the main thread into the simulation worker. This manipulation is explicitly queued and systematically instantiated definitively on the _next sequential tick cycle_, ensuring all topological equations evaluate precisely within a controlled chronological frame.
+Operations are sequentially batched via explicit messaging routines, avoiding race conditions. All player actions are queued and applied on the next tick cycle.
 
 ### 5. Pathfinding
 
-The A\* pathfinder (`engine/pathfinder.ts`) uses binary insertion to maintain a sorted open list (O(log n) per insert) with deterministic tile-ID tie-breaking. Paths are computed once per destination change and consumed one step per tick (1 tile/tick velocity cap). Path invalidation occurs automatically when buildings are placed or demolished on tiles that intersect existing worker paths.
+The A* pathfinder (`engine/pathfinder.ts`) uses binary insertion to maintain a sorted open list (O(log n) per insert) with deterministic tile-ID tie-breaking. Paths are computed once per destination change and consumed one step per tick (1 tile/tick velocity cap). Path invalidation occurs automatically when buildings are placed or demolished on tiles that intersect existing worker paths.

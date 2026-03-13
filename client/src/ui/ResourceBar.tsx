@@ -109,6 +109,8 @@ export function ResourceBar() {
   const tickCount = useGameStore((s) => s.tickCount);
   const simSpeed = useGameStore((s) => s.simSpeed);
   const setSimSpeed = useGameStore((s) => s.setSimSpeed);
+  const isPaused = useGameStore((s) => s.isPaused);
+  const togglePause = useGameStore((s) => s.togglePause);
   const speedOptions = [1, 2, 5, 10, 100];
 
   return (
@@ -124,6 +126,17 @@ export function ResourceBar() {
           TICK {tickCount}
         </span>
         <div className="flex flex-wrap gap-1 mt-1">
+          <button
+            className={`px-2 py-[1px] border transition-all ${
+              isPaused
+                ? "border-[#4aaf4a] bg-[#1a1a1a] hover:border-[#6fd16f]"
+                : "border-[#c04040] bg-[#1a1a1a] hover:border-[#e07070]"
+            }`}
+            style={{ fontSize: "6px", color: "#e8e8d0" }}
+            onClick={togglePause}
+          >
+            {isPaused ? "RESUME" : "PAUSE"}
+          </button>
           {speedOptions.map((speed) => (
             <button
               key={speed}

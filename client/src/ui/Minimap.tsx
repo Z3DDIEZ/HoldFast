@@ -162,11 +162,6 @@ export function Minimap() {
         style={{ imageRendering: "pixelated" }}
         onClick={handleMinimapClick}
       />
-      <div className="absolute top-1 left-1 px-1 bg-[#0f0f0f]/70 pointer-events-none">
-        <span style={{ color: "#888870", fontSize: "6px" }}>
-          {camera.zoom.toFixed(1)}×
-        </span>
-      </div>
     </div>
   );
 }

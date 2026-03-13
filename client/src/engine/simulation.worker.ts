@@ -126,6 +126,7 @@ function runTick() {
     stone: 0,
     knowledge: 0,
   };
+  let hasOperationalFoodProducer = false;
   const buildingUpdates: {
     id: string;
     staffed: boolean;
@@ -147,6 +148,9 @@ function runTick() {
 
     if (b.operational && config.resource) {
       productionDelta[config.resource] += config.yieldAmount;
+      if (config.resource === "food") {
+        hasOperationalFoodProducer = true;
+      }
     }
     buildingUpdates.push({
       id: b.id,
@@ -156,11 +160,17 @@ function runTick() {
   }
 
   // ─── STEP 4 — Consumption ───
-  const totalUpkeep = state.workers.length * WORKER_UPKEEP_FOOD;
+  const totalUpkeep = hasOperationalFoodProducer
+    ? state.workers.length * WORKER_UPKEEP_FOOD
+    : 0;
   const netFoodDelta =
     productionDelta.food + workerDepositDelta.food - totalUpkeep;
 
-  if (state.resources.food + netFoodDelta < 0) {
+  if (!hasOperationalFoodProducer) {
+    state.workers.forEach((w) => {
+      if (w.state === "STARVING") w.state = "IDLE";
+    });
+  } else if (state.resources.food + netFoodDelta < 0) {
     // Starvation: all workers enter STARVING state
     state.workers.forEach((w) => (w.state = "STARVING"));
   } else {
