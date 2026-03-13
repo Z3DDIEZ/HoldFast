@@ -107,6 +107,9 @@ export function ResourceBar() {
   const saveStatus = useGameStore((s) => s.saveStatus);
   const savedAt = useGameStore((s) => s.savedAt);
   const tickCount = useGameStore((s) => s.tickCount);
+  const simSpeed = useGameStore((s) => s.simSpeed);
+  const setSimSpeed = useGameStore((s) => s.setSimSpeed);
+  const speedOptions = [1, 2, 5, 10, 100];
 
   return (
     <div className="fixed top-0 left-0 w-full h-[48px] z-50 flex flex-row items-center px-4 gap-2 bg-[#0f0f0f]/95 border-b border-[#2a2a2a] backdrop-blur-sm">
@@ -120,6 +123,22 @@ export function ResourceBar() {
         <span style={{ color: "#555550", fontSize: "7px" }}>
           TICK {tickCount}
         </span>
+        <div className="flex flex-wrap gap-1 mt-1">
+          {speedOptions.map((speed) => (
+            <button
+              key={speed}
+              className={`px-1 py-[1px] border transition-all ${
+                simSpeed === speed
+                  ? "border-[#e8e8d0] bg-[#1a1a1a]"
+                  : "border-[#2a2a2a] hover:border-[#888870]"
+              }`}
+              style={{ fontSize: "6px", color: "#e8e8d0" }}
+              onClick={() => setSimSpeed(speed)}
+            >
+              {speed}x
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Resources */}

@@ -181,7 +181,8 @@ export type WorkerInbound =
   | { type: "INIT"; state: GameState }
   | { type: "PLAYER_ACTION"; action: PlayerAction }
   | { type: "PAUSE" }
-  | { type: "RESUME" };
+  | { type: "RESUME" }
+  | { type: "SET_SPEED"; multiplier: number };
 
 /** Messages sent from the Web Worker to the main thread. */
 export type WorkerOutbound =

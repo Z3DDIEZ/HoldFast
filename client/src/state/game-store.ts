@@ -3,9 +3,17 @@ import type {
   GameState,
   BuildingType,
   ResourcePool,
+  BuildingState,
+  WorkerState,
 } from "../engine/tick-types";
 import type { WorkerInbound, WorkerOutbound } from "../engine/tick-types";
-import { generateMap } from "../engine/map-generator";
+import {
+  generateMap,
+  CENTER_X,
+  CENTER_Y,
+  MAP_WIDTH,
+  expandTerritory,
+} from "../engine/map-generator";
 
 /** Camera pan/zoom state for the canvas renderer. */
 export interface CameraState {
@@ -63,6 +71,8 @@ export interface GameStore extends GameState {
   hoveredTileId: number | null;
   /** Action rejection alerts surfaced to the UI. */
   actionAlerts: ActionAlert[];
+  /** Current simulation speed multiplier (1x, 2x, 5x, 10x, 100x). */
+  simSpeed: number;
 
   // Actions
   initEngine: (seed: string) => void;
@@ -71,6 +81,7 @@ export interface GameStore extends GameState {
   selectBuilding: (type: BuildingType | null) => void;
   placeBuilding: (tileId: number) => void;
   demolishBuilding: (buildingId: string) => void;
+  setSimSpeed: (multiplier: number) => void;
   updateCamera: (updates: Partial<CameraState>) => void;
   setHoveredTile: (tileId: number | null) => void;
   assignWorker: (workerId: string, buildingId: string) => void;
@@ -152,6 +163,7 @@ export const useGameStore = create<GameStore>((set, get) => {
     selectedBuilding: null,
     hoveredTileId: null,
     actionAlerts: [],
+    simSpeed: 1,
     camera: {
       zoom: 1.0,
       offsetX: 0,
@@ -163,7 +175,55 @@ export const useGameStore = create<GameStore>((set, get) => {
       if (initialTiles.length === 0) {
         initialTiles = generateMap(seed);
       }
-      set({ mapSeed: seed, tiles: initialTiles });
+
+      let initialWorkers: WorkerState[] = [...get().workers];
+      let initialBuildings: BuildingState[] = [...get().buildings];
+      let initialResources: ResourcePool = { ...get().resources };
+
+      if (initialBuildings.length === 0 && initialWorkers.length === 0) {
+        const centerTileId = CENTER_Y * MAP_WIDTH + CENTER_X;
+        const centerTile = initialTiles[centerTileId];
+
+        if (centerTile && !centerTile.buildingId) {
+          const townHall: BuildingState = {
+            id: `b-0-${centerTileId}`,
+            type: "TOWN_HALL",
+            tileId: centerTileId,
+            tier: 1,
+            staffed: false,
+            operational: false,
+            assignedWorkerIds: [],
+          };
+
+          initialBuildings = [townHall];
+          centerTile.buildingId = townHall.id;
+          centerTile.walkable = false;
+          expandTerritory(initialTiles, centerTileId, 3, 5);
+
+          initialWorkers = Array.from({ length: 3 }).map((_, i) => ({
+            id: `w-0-${i}`,
+            state: "IDLE",
+            assignedBuildingId: null,
+            position: { x: CENTER_X, y: CENTER_Y },
+            path: [],
+            harvestTicks: 0,
+            carrying: null,
+          }));
+
+          initialResources = {
+            ...initialResources,
+            food: Math.max(initialResources.food, 20),
+          };
+        }
+      }
+
+      set({
+        mapSeed: seed,
+        tiles: initialTiles,
+        workers: initialWorkers,
+        buildings: initialBuildings,
+        resources: initialResources,
+      });
 
       const {
         mapSeed,
@@ -221,6 +281,14 @@ export const useGameStore = create<GameStore>((set, get) => {
         type: "PLAYER_ACTION",
         action: { type: "DEMOLISH_BUILDING", buildingId },
       };
+      worker.postMessage(cmd);
+    },
+
+    setSimSpeed: (multiplier: number) => {
+      const allowed = [1, 2, 5, 10, 100];
+      const nextSpeed = allowed.includes(multiplier) ? multiplier : 1;
+      set({ simSpeed: nextSpeed });
+      const cmd: WorkerInbound = { type: "SET_SPEED", multiplier: nextSpeed };
       worker.postMessage(cmd);
     },
 

@@ -41,6 +41,9 @@ function App() {
 
   // Tooltip position tracking
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
+  const [confirmDemolishId, setConfirmDemolishId] = useState<string | null>(
+    null,
+  );
 
   useEffect(() => {
     initEngine("deterministic-seed-123");
@@ -133,6 +136,9 @@ function App() {
   const idleWorkers = workers.filter(
     (w) => w.assignedBuildingId === null && w.state === "IDLE",
   );
+  const assignedWorkerIds = hoveredBuilding?.assignedWorkerIds ?? [];
+  const idleWorkersToShow = idleWorkers.slice(0, 6);
+  const assignedWorkersToShow = assignedWorkerIds.slice(0, 6);
   const tileWorkers =
     hoveredTileId !== null
       ? workers.filter((w) => {
@@ -141,22 +147,29 @@ function App() {
         })
       : [];
 
-  const canAssignWorker =
+  useEffect(() => {
+    setConfirmDemolishId(null);
+  }, [hoveredBuilding?.id]);
+
+  const canAssignToBuilding =
     hoveredBuilding &&
     hoveredBuildingConfig &&
     hoveredBuildingConfig.requiredWorkers > 0 &&
-    hoveredBuildingConfig.resource &&
-    hoveredBuilding.assignedWorkerIds.length <
-      hoveredBuildingConfig.requiredWorkers &&
+    hoveredBuildingConfig.resource;
+  const availableSlots = canAssignToBuilding
+    ? hoveredBuildingConfig.requiredWorkers - assignedWorkerIds.length
+    : 0;
+  const canAssignWorker =
+    canAssignToBuilding &&
+    availableSlots > 0 &&
     idleWorkers.length > 0;
-  const canUnassignWorker =
-    hoveredBuilding && hoveredBuilding.assignedWorkerIds.length > 0;
+  const canUnassignWorker = assignedWorkerIds.length > 0;
   const canDemolish =
     hoveredBuilding && hoveredBuilding.type !== "TOWN_HALL";
   const staffingLabel =
     hoveredBuilding && hoveredBuildingConfig
       ? hoveredBuildingConfig.requiredWorkers > 0
-        ? `${hoveredBuilding.assignedWorkerIds.length}/${hoveredBuildingConfig.requiredWorkers} staffed`
+        ? `${assignedWorkerIds.length}/${hoveredBuildingConfig.requiredWorkers} staffed`
         : "No staffing required"
       : "";
 
@@ -225,41 +238,84 @@ function App() {
             </span>
           </div>
 
-          <div className="grid grid-cols-2 gap-1">
+          {canAssignToBuilding ? (
+            <div className="flex flex-col gap-1">
+              <span style={{ color: "#888870", fontSize: "7px" }}>
+                ASSIGN ({Math.max(0, availableSlots)} slots)
+              </span>
+              <div className="flex flex-wrap gap-1">
+                {idleWorkersToShow.length === 0 && (
+                  <span style={{ color: "#555550", fontSize: "7px" }}>
+                    None
+                  </span>
+                )}
+                {idleWorkersToShow.map((worker) => (
+                  <button
+                    key={worker.id}
+                    className={`px-1 py-[1px] border transition-all ${
+                      canAssignWorker
+                        ? "border-[#4a8f3f] bg-[#4a8f3f]/20 hover:bg-[#4a8f3f]/40 cursor-pointer"
+                        : "border-[#2a2a2a] bg-transparent opacity-40 cursor-not-allowed"
+                    }`}
+                    style={{ fontSize: "6px", color: "#e8e8d0" }}
+                    onClick={() => {
+                      if (!canAssignWorker || !hoveredBuilding) return;
+                      assignWorker(worker.id, hoveredBuilding.id);
+                    }}
+                    disabled={!canAssignWorker}
+                  >
+                    {worker.id}
+                  </button>
+                ))}
+                {idleWorkers.length > idleWorkersToShow.length && (
+                  <span style={{ color: "#555550", fontSize: "6px" }}>
+                    +{idleWorkers.length - idleWorkersToShow.length} more
+                  </span>
+                )}
+              </div>
+            </div>
+          ) : (
+            <span style={{ color: "#555550", fontSize: "7px" }}>
+              No staffing required
+            </span>
+          )}
+
+          <div className="flex flex-col gap-1">
+            <span style={{ color: "#888870", fontSize: "7px" }}>
+              ASSIGNED
+            </span>
+            <div className="flex flex-wrap gap-1">
+              {assignedWorkersToShow.length === 0 && (
+                <span style={{ color: "#555550", fontSize: "7px" }}>
+                  None
+                </span>
+              )}
+              {assignedWorkersToShow.map((workerId) => (
+                <button
+                  key={workerId}
+                  className={`px-1 py-[1px] border transition-all ${
+                    canUnassignWorker
+                      ? "border-[#c8a020] bg-[#c8a020]/20 hover:bg-[#c8a020]/40 cursor-pointer"
+                      : "border-[#2a2a2a] bg-transparent opacity-40 cursor-not-allowed"
+                  }`}
+                  style={{ fontSize: "6px", color: "#e8e8d0" }}
+                  onClick={() => {
+                    if (!canUnassignWorker) return;
+                    unassignWorker(workerId);
+                  }}
+                  disabled={!canUnassignWorker}
+                >
+                  {workerId}
+                </button>
+              ))}
+              {assignedWorkerIds.length > assignedWorkersToShow.length && (
+                <span style={{ color: "#555550", fontSize: "6px" }}>
+                  +{assignedWorkerIds.length - assignedWorkersToShow.length} more
+                </span>
+              )}
+            </div>
             <button
               className={`py-1 border text-center transition-all ${
-                canAssignWorker
-                  ? "border-[#4a8f3f] bg-[#4a8f3f]/20 hover:bg-[#4a8f3f]/40 cursor-pointer"
-                  : "border-[#2a2a2a] bg-transparent opacity-40 cursor-not-allowed"
-              }`}
-              style={{ fontSize: "7px", color: "#e8e8d0" }}
-              onClick={() => {
-                if (!canAssignWorker || !hoveredBuilding) return;
-                const worker = idleWorkers[0];
-                if (worker) assignWorker(worker.id, hoveredBuilding.id);
-              }}
-              disabled={!canAssignWorker}
-            >
-              ASSIGN IDLE
-            </button>
-            <button
-              className={`py-1 border text-center transition-all ${
-                canUnassignWorker
-                  ? "border-[#c8a020] bg-[#c8a020]/20 hover:bg-[#c8a020]/40 cursor-pointer"
-                  : "border-[#2a2a2a] bg-transparent opacity-40 cursor-not-allowed"
-              }`}
-              style={{ fontSize: "7px", color: "#e8e8d0" }}
-              onClick={() => {
-                if (!canUnassignWorker || !hoveredBuilding) return;
-                const targetId = hoveredBuilding.assignedWorkerIds[0];
-                if (targetId) unassignWorker(targetId);
-              }}
-              disabled={!canUnassignWorker}
-            >
-              UNASSIGN 1
-            </button>
-            <button
-              className={`py-1 border text-center transition-all col-span-2 ${
                 canUnassignWorker
                   ? "border-[#888870] bg-[#888870]/10 hover:bg-[#888870]/30 cursor-pointer"
                   : "border-[#2a2a2a] bg-transparent opacity-40 cursor-not-allowed"
@@ -267,7 +323,7 @@ function App() {
               style={{ fontSize: "7px", color: "#e8e8d0" }}
               onClick={() => {
                 if (!canUnassignWorker || !hoveredBuilding) return;
-                hoveredBuilding.assignedWorkerIds.forEach((id) => {
+                assignedWorkerIds.forEach((id) => {
                   unassignWorker(id);
                 });
               }}
@@ -275,21 +331,50 @@ function App() {
             >
               UNASSIGN ALL
             </button>
-            <button
-              className={`py-1 border text-center transition-all col-span-2 ${
-                canDemolish
-                  ? "border-[#c04040] bg-[#c04040]/20 hover:bg-[#c04040]/40 cursor-pointer"
-                  : "border-[#2a2a2a] bg-transparent opacity-40 cursor-not-allowed"
-              }`}
-              style={{ fontSize: "7px", color: "#e8e8d0" }}
-              onClick={() => {
-                if (!canDemolish || !hoveredBuilding) return;
-                demolishBuilding(hoveredBuilding.id);
-              }}
-              disabled={!canDemolish}
-            >
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <span style={{ color: "#888870", fontSize: "7px" }}>
               DEMOLISH
-            </button>
+            </span>
+            {confirmDemolishId === hoveredBuilding.id ? (
+              <div className="grid grid-cols-2 gap-1">
+                <button
+                  className="py-1 border border-[#c04040] bg-[#c04040]/20 hover:bg-[#c04040]/40 text-center"
+                  style={{ fontSize: "7px", color: "#e8e8d0" }}
+                  onClick={() => {
+                    if (!canDemolish || !hoveredBuilding) return;
+                    demolishBuilding(hoveredBuilding.id);
+                    setConfirmDemolishId(null);
+                  }}
+                >
+                  CONFIRM
+                </button>
+                <button
+                  className="py-1 border border-[#2a2a2a] bg-transparent hover:bg-[#1a1a1a] text-center"
+                  style={{ fontSize: "7px", color: "#e8e8d0" }}
+                  onClick={() => setConfirmDemolishId(null)}
+                >
+                  CANCEL
+                </button>
+              </div>
+            ) : (
+              <button
+                className={`py-1 border text-center transition-all ${
+                  canDemolish
+                    ? "border-[#c04040] bg-[#c04040]/20 hover:bg-[#c04040]/40 cursor-pointer"
+                    : "border-[#2a2a2a] bg-transparent opacity-40 cursor-not-allowed"
+                }`}
+                style={{ fontSize: "7px", color: "#e8e8d0" }}
+                onClick={() => {
+                  if (!canDemolish || !hoveredBuilding) return;
+                  setConfirmDemolishId(hoveredBuilding.id);
+                }}
+                disabled={!canDemolish}
+              >
+                DEMOLISH
+              </button>
+            )}
           </div>
         </div>
       )}

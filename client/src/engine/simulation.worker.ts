@@ -14,7 +14,8 @@ import { BUILDING_CONFIG } from "./building-config";
 import { findPath, tileIdToCoord } from "./pathfinder";
 import { expandTerritory, MAP_WIDTH } from "./map-generator";
 
-const TICK_MS = 2000;
+const BASE_TICK_MS = 2000;
+const MIN_TICK_MS = 20;
 const BASE_STORAGE = 200;
 const STOREHOUSE_BONUS = 200;
 const WORKER_UPKEEP_FOOD = 1;
@@ -29,6 +30,7 @@ let state: GameState | null = null;
 let actionQueue: PlayerAction[] = [];
 let paused = false;
 let tickTimeoutId: ReturnType<typeof setTimeout> | null = null;
+let tickMs = BASE_TICK_MS;
 
 function emit(msg: WorkerOutbound) {
   self.postMessage(msg);
@@ -591,7 +593,17 @@ function scheduleTick() {
   tickTimeoutId = setTimeout(() => {
     runTick();
     scheduleTick();
-  }, TICK_MS);
+  }, tickMs);
+}
+
+function setSpeed(multiplier: number) {
+  if (!Number.isFinite(multiplier) || multiplier <= 0) return;
+  const clamped = Math.max(1, Math.min(100, multiplier));
+  tickMs = Math.max(MIN_TICK_MS, Math.floor(BASE_TICK_MS / clamped));
+  if (!paused) {
+    if (tickTimeoutId) clearTimeout(tickTimeoutId);
+    scheduleTick();
+  }
 }
 
 self.addEventListener("message", (e: MessageEvent<WorkerInbound>) => {
@@ -617,6 +629,9 @@ self.addEventListener("message", (e: MessageEvent<WorkerInbound>) => {
     case "RESUME":
       paused = false;
       scheduleTick();
+      break;
+    case "SET_SPEED":
+      setSpeed(msg.multiplier);
       break;
   }
 });
