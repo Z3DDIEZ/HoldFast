@@ -1,92 +1,8 @@
 import { useGameStore } from "../state/game-store";
-import type { BuildingType, ResourcePool } from "../state/types";
+import { BUILDING_LIST } from "../engine/building-config";
+import type { ResourcePool } from "../state/types";
 
-/** Building metadata for the palette display. */
-interface BuildingDef {
-  id: BuildingType;
-  name: string;
-  requiredEra: number;
-  cost: Partial<ResourcePool>;
-  produces: string | null;
-  ticksToHarvest: number;
-  yieldAmount: number;
-}
-
-/** Building definitions matching PRD §14.6. */
-const BUILDINGS: BuildingDef[] = [
-  {
-    id: "TOWN_HALL",
-    name: "Town Hall",
-    requiredEra: 1,
-    cost: {},
-    produces: null,
-    ticksToHarvest: 0,
-    yieldAmount: 0,
-  },
-  {
-    id: "FORAGER_HUT",
-    name: "Forager Hut",
-    requiredEra: 1,
-    cost: { wood: 10 },
-    produces: "food",
-    ticksToHarvest: 3,
-    yieldAmount: 1,
-  },
-  {
-    id: "LUMBER_MILL",
-    name: "Lumber Mill",
-    requiredEra: 1,
-    cost: { wood: 5, stone: 5 },
-    produces: "wood",
-    ticksToHarvest: 3,
-    yieldAmount: 1,
-  },
-  {
-    id: "QUARRY",
-    name: "Quarry",
-    requiredEra: 1,
-    cost: { wood: 8 },
-    produces: "stone",
-    ticksToHarvest: 4,
-    yieldAmount: 1,
-  },
-  {
-    id: "STOREHOUSE",
-    name: "Storehouse",
-    requiredEra: 1,
-    cost: { wood: 15, stone: 5 },
-    produces: null,
-    ticksToHarvest: 0,
-    yieldAmount: 0,
-  },
-  {
-    id: "FARM",
-    name: "Farm",
-    requiredEra: 2,
-    cost: { wood: 20, stone: 10 },
-    produces: "food",
-    ticksToHarvest: 2,
-    yieldAmount: 2,
-  },
-  {
-    id: "LIBRARY",
-    name: "Library",
-    requiredEra: 2,
-    cost: { wood: 25, stone: 20 },
-    produces: "knowledge",
-    ticksToHarvest: 5,
-    yieldAmount: 1,
-  },
-  {
-    id: "BARRACKS",
-    name: "Barracks",
-    requiredEra: 3,
-    cost: { wood: 30, stone: 30 },
-    produces: null,
-    ticksToHarvest: 0,
-    yieldAmount: 0,
-  },
-];
+const BUILDINGS = BUILDING_LIST;
 
 /** Resource accent colours from the PRD HUD palette. */
 const RESOURCE_COLORS: Record<string, string> = {
@@ -116,11 +32,15 @@ export function BuildingPalette() {
   const resources = useGameStore((s) => s.resources);
   const selectedBuilding = useGameStore((s) => s.selectedBuilding);
   const selectBuilding = useGameStore((s) => s.selectBuilding);
+  const hasTownHall = useGameStore((s) =>
+    s.buildings.some((b) => b.type === "TOWN_HALL"),
+  );
 
   return (
     <div className="fixed bottom-0 left-0 w-full h-[96px] z-50 flex flex-row items-center px-3 gap-2 bg-[#0f0f0f]/95 border-t border-[#2a2a2a] backdrop-blur-sm overflow-x-auto">
       {BUILDINGS.map((b) => {
-        const isLocked = b.requiredEra > currentEra;
+        const isTownHallPlaced = b.id === "TOWN_HALL" && hasTownHall;
+        const isLocked = b.requiredEra > currentEra || isTownHallPlaced;
         const isSelected = selectedBuilding === b.id;
         const affordable = canAfford(b.cost, resources);
         const isDisabled = isLocked || !affordable;
@@ -155,18 +75,18 @@ export function BuildingPalette() {
             </span>
 
             {/* Production info */}
-            {b.produces ? (
+            {b.resource ? (
               <div className="flex items-center gap-1">
                 <div
                   className="w-[5px] h-[5px]"
                   style={{
-                    backgroundColor: RESOURCE_COLORS[b.produces] || "#888870",
+                    backgroundColor: RESOURCE_COLORS[b.resource] || "#888870",
                   }}
                 />
                 <span
                   style={{
                     fontSize: "6px",
-                    color: RESOURCE_COLORS[b.produces] || "#888870",
+                    color: RESOURCE_COLORS[b.resource] || "#888870",
                   }}
                 >
                   +{b.yieldAmount}/{b.ticksToHarvest}t
@@ -209,7 +129,7 @@ export function BuildingPalette() {
             {isLocked && (
               <div className="absolute inset-0 flex items-center justify-center bg-[#0f0f0f]/80">
                 <span style={{ color: "#c04040", fontSize: "7px" }}>
-                  ERA {b.requiredEra}
+                  {isTownHallPlaced ? "PLACED" : `ERA ${b.requiredEra}`}
                 </span>
               </div>
             )}
@@ -219,3 +139,4 @@ export function BuildingPalette() {
     </div>
   );
 }
+

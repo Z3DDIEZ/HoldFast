@@ -1,7 +1,15 @@
 import type { GameStore, CameraState } from "../state/game-store";
-import type { TileState, BuildingState, WorkerState } from "../state/types";
+import type {
+  TileState,
+  BuildingState,
+  WorkerState,
+  ResourcePool,
+  TileType,
+  BuildingType,
+} from "../state/types";
 import { tileIdToCoord } from "../engine/pathfinder";
 import { MAP_WIDTH } from "../engine/map-generator";
+import { BUILDING_CONFIG } from "../engine/building-config";
 
 /** Logical tile size before scaling. */
 const TILE_SIZE = 16;
@@ -69,6 +77,12 @@ const BUILDING_LABELS: Record<string, string> = {
   BARRACKS: "BK",
 };
 
+const ADJACENT_BIOME_REQUIREMENTS: Partial<Record<BuildingType, TileType>> = {
+  FORAGER_HUT: "GRASSLAND",
+  LUMBER_MILL: "FOREST",
+  QUARRY: "STONE_DEPOSIT",
+};
+
 /** Worker colours per state. */
 const WORKER_STATE_COLORS: Record<string, string> = {
   IDLE: "#ffffff",
@@ -94,6 +108,13 @@ export class CanvasRenderer {
   private tiles: TileState[] = [];
   private buildings: BuildingState[] = [];
   private workers: WorkerState[] = [];
+  private era = 1;
+  private resources: ResourcePool = {
+    food: 0,
+    wood: 0,
+    stone: 0,
+    knowledge: 0,
+  };
   private camera: CameraState = { zoom: 1, offsetX: 0, offsetY: 0 };
   private selectedBuilding: string | null = null;
   private hoveredTileId: number | null = null;
@@ -127,6 +148,8 @@ export class CanvasRenderer {
     this.tiles = store.tiles;
     this.buildings = store.buildings;
     this.workers = store.workers;
+    this.era = store.era;
+    this.resources = store.resources;
     this.camera = camera;
     this.selectedBuilding = store.selectedBuilding;
     this.hoveredTileId = store.hoveredTileId;
@@ -146,6 +169,68 @@ export class CanvasRenderer {
       return ty * MAP_WIDTH + tx;
     }
     return null;
+  }
+
+  private canAfford(cost: Partial<ResourcePool>): boolean {
+    for (const [key, amount] of Object.entries(cost)) {
+      if (this.resources[key as keyof ResourcePool] < (amount || 0)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private hasAdjacentBiome(tileId: number, required: TileType): boolean {
+    const coord = tileIdToCoord(tileId);
+    const neighbors = [
+      { x: coord.x, y: coord.y - 1 },
+      { x: coord.x, y: coord.y + 1 },
+      { x: coord.x - 1, y: coord.y },
+      { x: coord.x + 1, y: coord.y },
+    ];
+
+    for (const n of neighbors) {
+      if (n.x < 0 || n.x >= MAP_WIDTH || n.y < 0 || n.y >= MAP_WIDTH) {
+        continue;
+      }
+      const nId = n.y * MAP_WIDTH + n.x;
+      if (this.tiles[nId]?.type === required) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  private isPlacementValid(
+    tileId: number,
+    buildingType: string | null,
+  ): boolean {
+    if (!buildingType) return false;
+    const tile = this.tiles[tileId];
+    if (!tile || !tile.owned || !tile.walkable || tile.buildingId) {
+      return false;
+    }
+
+    const config = BUILDING_CONFIG[buildingType as BuildingType];
+    if (!config) return false;
+    if (this.era < config.requiredEra) return false;
+    if (!this.canAfford(config.cost)) return false;
+
+    if (
+      buildingType === "TOWN_HALL" &&
+      this.buildings.some((b) => b.type === "TOWN_HALL")
+    ) {
+      return false;
+    }
+
+    const requiredBiome =
+      ADJACENT_BIOME_REQUIREMENTS[buildingType as BuildingType];
+    if (requiredBiome && !this.hasAdjacentBiome(tileId, requiredBiome)) {
+      return false;
+    }
+
+    return true;
   }
 
   /** Clean up event listeners. */
@@ -326,8 +411,10 @@ export class CanvasRenderer {
         const px = totalX + coord.x * this.currentTileSize;
         const py = totalY + coord.y * this.currentTileSize;
 
-        const isValid =
-          tile.owned && tile.walkable && !tile.buildingId && tile.visible;
+        const isValid = this.isPlacementValid(
+          this.hoveredTileId,
+          this.selectedBuilding,
+        );
 
         ctx.strokeStyle = isValid
           ? "rgba(74, 175, 74, 0.8)"

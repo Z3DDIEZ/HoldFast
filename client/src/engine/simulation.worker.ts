@@ -7,10 +7,10 @@ import type {
   PlayerAction,
   TickResult,
   ResourcePool,
-  ResourceType,
   BuildingState,
   WorkerState,
 } from "./tick-types";
+import { BUILDING_CONFIG } from "./building-config";
 import { findPath, tileIdToCoord } from "./pathfinder";
 import { expandTerritory, MAP_WIDTH } from "./map-generator";
 
@@ -24,83 +24,6 @@ const ERA_THRESHOLDS = { 1: 50, 2: 200 } as const;
 /** Worker count gate to advance eras. Keyed by current era. */
 const ERA_POPULATION_GATES = { 1: 3, 2: 8 } as const;
 
-/** Building configuration table matching PRD §14.6. */
-const BUILDING_CONFIG: Record<
-  string,
-  {
-    resource: ResourceType | null;
-    ticksToHarvest: number;
-    yieldAmount: number;
-    requiredWorkers: number;
-    requiredEra: number;
-    cost: Partial<ResourcePool>;
-  }
-> = {
-  TOWN_HALL: {
-    resource: null,
-    ticksToHarvest: 0,
-    yieldAmount: 0,
-    requiredWorkers: 0,
-    requiredEra: 1,
-    cost: {},
-  },
-  FORAGER_HUT: {
-    resource: "food",
-    ticksToHarvest: 3,
-    yieldAmount: 1,
-    requiredWorkers: 1,
-    requiredEra: 1,
-    cost: { wood: 10 },
-  },
-  LUMBER_MILL: {
-    resource: "wood",
-    ticksToHarvest: 3,
-    yieldAmount: 1,
-    requiredWorkers: 1,
-    requiredEra: 1,
-    cost: { wood: 5, stone: 5 },
-  },
-  QUARRY: {
-    resource: "stone",
-    ticksToHarvest: 4,
-    yieldAmount: 1,
-    requiredWorkers: 1,
-    requiredEra: 1,
-    cost: { wood: 8 },
-  },
-  STOREHOUSE: {
-    resource: null,
-    ticksToHarvest: 0,
-    yieldAmount: 0,
-    requiredWorkers: 0,
-    requiredEra: 1,
-    cost: { wood: 15, stone: 5 },
-  },
-  FARM: {
-    resource: "food",
-    ticksToHarvest: 2,
-    yieldAmount: 2,
-    requiredWorkers: 2,
-    requiredEra: 2,
-    cost: { wood: 20, stone: 10 },
-  },
-  LIBRARY: {
-    resource: "knowledge",
-    ticksToHarvest: 5,
-    yieldAmount: 1,
-    requiredWorkers: 1,
-    requiredEra: 2,
-    cost: { wood: 25, stone: 20 },
-  },
-  BARRACKS: {
-    resource: null,
-    ticksToHarvest: 0,
-    yieldAmount: 0,
-    requiredWorkers: 0,
-    requiredEra: 3,
-    cost: { wood: 30, stone: 30 },
-  },
-};
 
 let state: GameState | null = null;
 let actionQueue: PlayerAction[] = [];
@@ -287,6 +210,12 @@ function validateAndApplyAction(action: PlayerAction): string | null {
       const config = BUILDING_CONFIG[action.buildingType];
       if (!config) return "UNKNOWN_BUILDING_TYPE";
       if (state.era < config.requiredEra) return "ERA_LOCKED";
+      if (
+        action.buildingType === "TOWN_HALL" &&
+        state.buildings.some((b) => b.type === "TOWN_HALL")
+      ) {
+        return "TOWN_HALL_EXISTS";
+      }
 
       // Adjacency Validation
       if (
@@ -432,6 +361,9 @@ function validateAndApplyAction(action: PlayerAction): string | null {
 
       // Check if building is fully staffed
       const config = BUILDING_CONFIG[b.type];
+      if (!config || config.requiredWorkers === 0 || !config.resource) {
+        return "BUILDING_NOT_ASSIGNABLE";
+      }
       if (
         config &&
         config.requiredWorkers > 0 &&
@@ -688,3 +620,4 @@ self.addEventListener("message", (e: MessageEvent<WorkerInbound>) => {
       break;
   }
 });
+

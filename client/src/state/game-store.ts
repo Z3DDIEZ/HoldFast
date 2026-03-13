@@ -14,6 +14,41 @@ export interface CameraState {
   offsetY: number;
 }
 
+interface ActionAlert {
+  id: string;
+  message: string;
+}
+
+const ACTION_REJECTION_MESSAGES: Record<string, string> = {
+  TILE_NOT_FOUND: "Tile not found.",
+  TILE_INVALID: "Cannot place building on that tile.",
+  UNKNOWN_BUILDING_TYPE: "Unknown building type.",
+  ERA_LOCKED: "Building locked by era.",
+  TOWN_HALL_EXISTS: "Only one Town Hall can be placed.",
+  MISSING_ADJACENT_BIOME: "Missing required adjacent biome.",
+  INSUFFICIENT_RESOURCES: "Not enough resources.",
+  BUILDING_NOT_FOUND: "Building not found.",
+  CANNOT_DEMOLISH_TOWN_HALL: "Town Hall cannot be demolished.",
+  INVALID_TARGETS: "Invalid worker or building.",
+  WORKER_ALREADY_ASSIGNED: "Worker already assigned.",
+  BUILDING_NOT_ASSIGNABLE: "Building cannot take workers.",
+  BUILDING_FULLY_STAFFED: "Building is fully staffed.",
+  NOT_ASSIGNED: "Worker is not assigned.",
+  INVALID_ERA_ORDER: "Era transition invalid.",
+  INSUFFICIENT_KNOWLEDGE: "Not enough knowledge.",
+  INSUFFICIENT_POPULATION: "Not enough workers.",
+  INSUFFICIENT_FOOD: "Not enough food to spawn a worker.",
+  TOWN_HALL_MISSING: "Town Hall required.",
+  UNKNOWN_ACTION: "Unknown action.",
+  NO_STATE: "Simulation not ready.",
+};
+
+let alertCounter = 0;
+
+function formatActionRejection(reason: string): string {
+  return ACTION_REJECTION_MESSAGES[reason] || `Action rejected: ${reason}`;
+}
+
 /** Extended game store combining engine state with UI-only fields. */
 export interface GameStore extends GameState {
   /** Currently selected building type for placement, or null. */
@@ -26,6 +61,8 @@ export interface GameStore extends GameState {
   resourceDelta: ResourcePool;
   /** Tile ID currently under the mouse cursor, or null. */
   hoveredTileId: number | null;
+  /** Action rejection alerts surfaced to the UI. */
+  actionAlerts: ActionAlert[];
 
   // Actions
   initEngine: (seed: string) => void;
@@ -33,6 +70,7 @@ export interface GameStore extends GameState {
   resumeEngine: () => void;
   selectBuilding: (type: BuildingType | null) => void;
   placeBuilding: (tileId: number) => void;
+  demolishBuilding: (buildingId: string) => void;
   updateCamera: (updates: Partial<CameraState>) => void;
   setHoveredTile: (tileId: number | null) => void;
   assignWorker: (workerId: string, buildingId: string) => void;
@@ -49,6 +87,23 @@ const worker = new Worker(
 );
 
 export const useGameStore = create<GameStore>((set, get) => {
+  const pushActionAlert = (message: string) => {
+    const id = `alert-${Date.now()}-${alertCounter++}`;
+    set((state) => ({
+      actionAlerts: [...state.actionAlerts, { id, message }].slice(-3),
+    }));
+
+    setTimeout(() => {
+      set((state) => ({
+        actionAlerts: state.actionAlerts.filter((alert) => alert.id !== id),
+      }));
+    }, 3500);
+  };
+
+  const handleActionRejection = (reason: string) => {
+    pushActionAlert(formatActionRejection(reason));
+  };
+
   // Listen for Worker messages
   worker.addEventListener("message", (e: MessageEvent<WorkerOutbound>) => {
     const event = e.data;
@@ -64,12 +119,18 @@ export const useGameStore = create<GameStore>((set, get) => {
           buildings: event.buildings,
           tiles: event.tiles,
         });
+        if (event.actionRejections.length > 0) {
+          event.actionRejections.forEach((rejection) => {
+            handleActionRejection(rejection.reason);
+          });
+        }
         break;
       case "READY":
         console.log("[Holdfast] Engine Ready");
         break;
       case "ACTION_REJECTED":
         console.warn("[Holdfast] Action Rejected:", event.reason, event.action);
+        handleActionRejection(event.reason);
         break;
     }
   });
@@ -90,6 +151,7 @@ export const useGameStore = create<GameStore>((set, get) => {
     // UI state
     selectedBuilding: null,
     hoveredTileId: null,
+    actionAlerts: [],
     camera: {
       zoom: 1.0,
       offsetX: 0,
@@ -152,6 +214,14 @@ export const useGameStore = create<GameStore>((set, get) => {
       };
       worker.postMessage(cmd);
       set({ selectedBuilding: null });
+    },
+
+    demolishBuilding: (buildingId: string) => {
+      const cmd: WorkerInbound = {
+        type: "PLAYER_ACTION",
+        action: { type: "DEMOLISH_BUILDING", buildingId },
+      };
+      worker.postMessage(cmd);
     },
 
     assignWorker: (workerId: string, buildingId: string) => {
