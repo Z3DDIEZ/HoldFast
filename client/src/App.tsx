@@ -41,9 +41,21 @@ function App() {
 
   // Tooltip position tracking
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
+  const [selectedTileId, setSelectedTileId] = useState<number | null>(null);
   const [confirmDemolishId, setConfirmDemolishId] = useState<string | null>(
     null,
   );
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setSelectedTileId(null);
+        setConfirmDemolishId(null);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   useEffect(() => {
     initEngine("deterministic-seed-123");
@@ -75,8 +87,21 @@ function App() {
     if (dragDistance.current > 5) return;
 
     const tileId = rendererRef.current.screenToTileId(e.clientX, e.clientY);
-    if (tileId !== null && selectedBuilding) {
-      placeBuilding(tileId);
+    if (tileId !== null) {
+      if (selectedBuilding) {
+        placeBuilding(tileId);
+      } else {
+        if (selectedTileId === tileId) {
+          setSelectedTileId(null);
+        } else {
+          const tile = tiles[tileId];
+          if (tile?.buildingId) {
+            setSelectedTileId(tileId);
+          } else {
+            setSelectedTileId(null);
+          }
+        }
+      }
     }
   };
 
@@ -125,7 +150,18 @@ function App() {
     setHoveredTile(null);
   };
 
-  // Compute tooltip data
+  // Priority for right panel: selected tile > hovered tile
+  const activeTileId = selectedTileId !== null ? selectedTileId : hoveredTileId;
+  const activeTile = activeTileId !== null ? tiles[activeTileId] : null;
+
+  const activeBuilding = activeTile?.buildingId
+    ? buildings.find((b) => b.id === activeTile.buildingId)
+    : null;
+  const activeBuildingConfig = activeBuilding
+    ? BUILDING_CONFIG[activeBuilding.type]
+    : null;
+
+  // Compute tooltip data for the cursor hover strictly
   const hoveredTile = hoveredTileId !== null ? tiles[hoveredTileId] : null;
   const hoveredBuilding = hoveredTile?.buildingId
     ? buildings.find((b) => b.id === hoveredTile.buildingId)
@@ -133,10 +169,11 @@ function App() {
   const hoveredBuildingConfig = hoveredBuilding
     ? BUILDING_CONFIG[hoveredBuilding.type]
     : null;
+
   const idleWorkers = workers.filter(
     (w) => w.assignedBuildingId === null && w.state === "IDLE",
   );
-  const assignedWorkerIds = hoveredBuilding?.assignedWorkerIds ?? [];
+  const assignedWorkerIds = activeBuilding?.assignedWorkerIds ?? [];
   const idleWorkersToShow = idleWorkers.slice(0, 6);
   const assignedWorkersToShow = assignedWorkerIds.slice(0, 6);
   const tileWorkers =
@@ -149,16 +186,16 @@ function App() {
 
   useEffect(() => {
     setConfirmDemolishId(null);
-  }, [hoveredBuilding?.id]);
+  }, [activeBuilding?.id]);
 
   const canAssignToBuilding =
-    hoveredBuilding &&
-    hoveredBuildingConfig &&
-    hoveredBuilding.constructionTicksRemaining === 0 &&
-    hoveredBuildingConfig.requiredWorkers > 0 &&
-    hoveredBuildingConfig.resource;
+    activeBuilding &&
+    activeBuildingConfig &&
+    activeBuilding.constructionTicksRemaining === 0 &&
+    activeBuildingConfig.requiredWorkers > 0 &&
+    activeBuildingConfig.resource;
   const availableSlots = canAssignToBuilding
-    ? hoveredBuildingConfig.requiredWorkers - assignedWorkerIds.length
+    ? activeBuildingConfig.requiredWorkers - assignedWorkerIds.length
     : 0;
   const canAssignWorker =
     canAssignToBuilding &&
@@ -166,17 +203,17 @@ function App() {
     idleWorkers.length > 0;
   const canUnassignWorker = assignedWorkerIds.length > 0;
   const canDemolish =
-    hoveredBuilding && hoveredBuilding.type !== "TOWN_HALL";
+    activeBuilding && activeBuilding.type !== "TOWN_HALL";
   const staffingLabel =
-    hoveredBuilding && hoveredBuildingConfig
-      ? hoveredBuildingConfig.requiredWorkers > 0
-        ? `${assignedWorkerIds.length}/${hoveredBuildingConfig.requiredWorkers} staffed`
+    activeBuilding && activeBuildingConfig
+      ? activeBuildingConfig.requiredWorkers > 0
+        ? `${assignedWorkerIds.length}/${activeBuildingConfig.requiredWorkers} staffed`
         : "No staffing required"
       : "";
-  const buildingStatus = hoveredBuilding
-    ? hoveredBuilding.constructionTicksRemaining > 0
-      ? `CONSTRUCTING (${hoveredBuilding.constructionTicksRemaining}t)`
-      : hoveredBuilding.operational
+  const buildingStatus = activeBuilding
+    ? activeBuilding.constructionTicksRemaining > 0
+      ? `CONSTRUCTING (${activeBuilding.constructionTicksRemaining}t)`
+      : activeBuilding.operational
         ? "OPERATIONAL"
         : "IDLE"
     : "";
@@ -223,19 +260,28 @@ function App() {
       )}
 
       {/* Building actions panel */}
-      {hoveredBuilding && hoveredBuildingConfig && (
+      {activeBuilding && activeBuildingConfig && (
         <div className="fixed right-0 top-[56px] w-[220px] z-40 bg-[#0f0f0f]/95 border-l border-b border-[#2a2a2a] backdrop-blur-sm p-3 flex flex-col gap-2 pointer-events-auto">
+          {/* Header indicating selection status */}
+          {selectedTileId !== null && (
+            <div className="absolute -left-[1px] top-0 bottom-0 w-[2px] bg-[#c8a020]"></div>
+          )}
           <div className="flex flex-col gap-1 border-b border-[#2a2a2a] pb-2">
-            <span style={{ color: "#888870", fontSize: "7px" }}>
-              BUILDING
-            </span>
+            <div className="flex justify-between items-center">
+              <span style={{ color: "#888870", fontSize: "7px" }}>
+                BUILDING
+              </span>
+              {selectedTileId !== null && (
+                <span style={{ color: "#c8a020", fontSize: "6px" }}>SELECTED</span>
+              )}
+            </div>
             <span style={{ color: "#e8e8d0", fontSize: "9px" }}>
-              {hoveredBuildingConfig.name}
+              {activeBuildingConfig.name}
             </span>
             <span style={{ color: "#555550", fontSize: "7px" }}>
               {staffingLabel}
             </span>
-            {hoveredBuilding.constructionTicksRemaining > 0 && (
+            {activeBuilding.constructionTicksRemaining > 0 && (
               <span style={{ color: "#c8a020", fontSize: "7px" }}>
                 {buildingStatus}
               </span>
@@ -272,8 +318,8 @@ function App() {
                     }`}
                     style={{ fontSize: "6px", color: "#e8e8d0" }}
                     onClick={() => {
-                      if (!canAssignWorker || !hoveredBuilding) return;
-                      assignWorker(worker.id, hoveredBuilding.id);
+                      if (!canAssignWorker || !activeBuilding) return;
+                      assignWorker(worker.id, activeBuilding.id);
                     }}
                     disabled={!canAssignWorker}
                   >
@@ -335,7 +381,7 @@ function App() {
               }`}
               style={{ fontSize: "7px", color: "#e8e8d0" }}
               onClick={() => {
-                if (!canUnassignWorker || !hoveredBuilding) return;
+                if (!canUnassignWorker || !activeBuilding) return;
                 assignedWorkerIds.forEach((id) => {
                   unassignWorker(id);
                 });
@@ -350,14 +396,17 @@ function App() {
             <span style={{ color: "#888870", fontSize: "7px" }}>
               DEMOLISH
             </span>
-            {confirmDemolishId === hoveredBuilding.id ? (
+            {confirmDemolishId === activeBuilding.id ? (
               <div className="grid grid-cols-2 gap-1">
                 <button
                   className="py-1 border border-[#c04040] bg-[#c04040]/20 hover:bg-[#c04040]/40 text-center"
                   style={{ fontSize: "7px", color: "#e8e8d0" }}
                   onClick={() => {
-                    if (!canDemolish || !hoveredBuilding) return;
-                    demolishBuilding(hoveredBuilding.id);
+                    if (!canDemolish || !activeBuilding) return;
+                    demolishBuilding(activeBuilding.id);
+                    if (selectedTileId === activeTileId) {
+                      setSelectedTileId(null);
+                    }
                     setConfirmDemolishId(null);
                   }}
                 >
@@ -380,8 +429,8 @@ function App() {
                 }`}
                 style={{ fontSize: "7px", color: "#e8e8d0" }}
                 onClick={() => {
-                  if (!canDemolish || !hoveredBuilding) return;
-                  setConfirmDemolishId(hoveredBuilding.id);
+                  if (!canDemolish || !activeBuilding) return;
+                  setConfirmDemolishId(activeBuilding.id);
                 }}
                 disabled={!canDemolish}
               >

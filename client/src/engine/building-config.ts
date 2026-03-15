@@ -29,7 +29,7 @@ export const BUILDING_CONFIG: Record<BuildingType, BuildingConfig> = {
     name: "Forager Hut",
     resource: "food",
     ticksToHarvest: 3,
-    yieldAmount: 1,
+    yieldAmount: 3,
     constructionTicks: 3,
     requiredWorkers: 1,
     requiredEra: 1,
