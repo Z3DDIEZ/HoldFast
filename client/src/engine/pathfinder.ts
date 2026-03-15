@@ -156,7 +156,7 @@ export function findPath(
       // - tile must not have a building on it (buildingId === null)
       // - Exception: destination tile is always reachable (building entrance)
       const isEnd = nx === end.x && ny === end.y;
-      const isWalkable = tile.walkable && (tile.buildingId === null || isEnd);
+      const isWalkable = (tile.walkable && tile.buildingId === null) || isEnd;
 
       if (!isWalkable) continue;
 

@@ -164,6 +164,96 @@ describe("simulation.worker", () => {
     expect(depositDelta.wood).toBe(0);
   });
 
+  it("rebuilds the deposit path when it is cleared", () => {
+    const tiles = createTiles();
+    const townHall = createBuilding("b-th", "TOWN_HALL", 2, 2);
+    applyBuildingToTiles(tiles, townHall);
+
+    const worker = createWorker(
+      "w-1",
+      { x: 2, y: 3 },
+      "MOVING_TO_DEPOSIT",
+      townHall.id,
+      { type: "wood", amount: 1 },
+    );
+
+    const state = createState({
+      tiles,
+      buildings: [townHall],
+      workers: [worker],
+      resources: emptyResources(),
+    });
+
+    __test__.setState(state);
+    const depositDelta = emptyResources();
+    __test__.processWorkerStateMachine(worker, depositDelta);
+
+    expect(worker.state).toBe("MOVING_TO_DEPOSIT");
+    expect(worker.path.length).toBeGreaterThan(0);
+  });
+
+  it("resumes deposit when storage frees up", () => {
+    const tiles = createTiles();
+    const townHall = createBuilding("b-th", "TOWN_HALL", 2, 2);
+    applyBuildingToTiles(tiles, townHall);
+
+    const worker = createWorker(
+      "w-1",
+      { x: 2, y: 3 },
+      "WAITING",
+      townHall.id,
+      { type: "food", amount: 1 },
+    );
+
+    const state = createState({
+      tiles,
+      buildings: [townHall],
+      workers: [worker],
+      resources: { food: 200, wood: 200, stone: 200, knowledge: 200 },
+    });
+
+    __test__.setState(state);
+    const depositDelta = emptyResources();
+    __test__.processWorkerStateMachine(worker, depositDelta);
+    expect(worker.state).toBe("WAITING");
+
+    state.resources.food = 199;
+    __test__.processWorkerStateMachine(worker, depositDelta);
+
+    expect(worker.state).toBe("MOVING_TO_DEPOSIT");
+    expect(worker.path.length).toBeGreaterThan(0);
+  });
+
+  it("completes a harvest cycle and deposits resources", () => {
+    const tiles = createTiles();
+    const townHall = createBuilding("b-th", "TOWN_HALL", 2, 2);
+    const forager = createBuilding("b-forage", "FORAGER_HUT", 2, 3);
+    applyBuildingToTiles(tiles, townHall);
+    applyBuildingToTiles(tiles, forager);
+
+    const worker = createWorker(
+      "w-1",
+      { x: 2, y: 3 },
+      "IDLE",
+      forager.id,
+    );
+
+    const state = createState({
+      tiles,
+      buildings: [townHall, forager],
+      workers: [worker],
+      resources: emptyResources(),
+    });
+
+    __test__.setState(state);
+    for (let i = 0; i < 7; i++) {
+      __test__.runTick();
+    }
+
+    const nextState = __test__.getState();
+    expect(nextState?.resources.food).toBe(1);
+  });
+
   it("rejects worker spawns when housing is full", () => {
     const tiles = createTiles();
     const townHall = createBuilding("b-th", "TOWN_HALL", 2, 2);
@@ -233,7 +323,11 @@ describe("simulation.worker", () => {
     ];
 
     const messages: TickResult[] = [];
-    (globalThis as unknown as { self?: { postMessage: (msg: TickResult) => void } }).self = {
+    const globalSelf = globalThis as unknown as {
+      self?: { postMessage: (msg: TickResult) => void };
+    };
+    const previousSelf = globalSelf.self;
+    globalSelf.self = {
       postMessage: (msg: TickResult) => {
         messages.push(msg);
       },
@@ -248,9 +342,13 @@ describe("simulation.worker", () => {
       resources: { food: 0, wood: 0, stone: 0, knowledge: 100 },
     });
 
-    __test__.setState(state);
-    __test__.queueAction({ type: "RESEARCH_ERA", targetEra: 2 });
-    __test__.runTick();
+    try {
+      __test__.setState(state);
+      __test__.queueAction({ type: "RESEARCH_ERA", targetEra: 2 });
+      __test__.runTick();
+    } finally {
+      globalSelf.self = previousSelf;
+    }
 
     const tickResult = messages.find((msg) => msg.type === "TICK_RESULT");
     expect(tickResult?.eraChanged).toBe(true);
