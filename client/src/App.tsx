@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ResourceBar } from "./ui/ResourceBar";
 import { EraPanel } from "./ui/EraPanel";
-import { BuildingPalette } from "./ui/BuildingPalette";
+import { HUD } from "./ui/BuildingPalette";
 import { Minimap } from "./ui/Minimap";
 import { useGameStore } from "./state/game-store";
 import { CanvasRenderer } from "./renderer/canvas-renderer";
@@ -95,11 +95,13 @@ function App() {
           setSelectedTileId(null);
         } else {
           const tile = tiles[tileId];
-          if (tile?.buildingId) {
-            setSelectedTileId(tileId);
-          } else {
-            setSelectedTileId(null);
-          }
+            if (tile?.buildingId) {
+              setSelectedTileId(tileId);
+              store.selectPlacedBuilding(tile.buildingId);
+            } else {
+              setSelectedTileId(null);
+              store.selectPlacedBuilding(null);
+            }
         }
       }
     }
@@ -241,7 +243,7 @@ function App() {
 
       <ResourceBar />
       <EraPanel />
-      <BuildingPalette />
+      <HUD />
       <Minimap />
 
       {/* Action rejection alerts */}

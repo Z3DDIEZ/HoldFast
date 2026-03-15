@@ -4,7 +4,8 @@ import type {
   BuildingType,
   ResourcePool,
   BuildingState,
-  WorkerState,
+  UnitState as WorkerState,
+  UnitType,
 } from "../engine/tick-types";
 import type { WorkerInbound, WorkerOutbound } from "../engine/tick-types";
 import {
@@ -71,11 +72,12 @@ function formatActionRejection(reason: string): string {
 export interface GameStore extends GameState {
   /** Currently selected building type for placement, or null. */
   selectedBuilding: BuildingType | null;
+  /** Currently selected placed building instance, or null. */
+  selectedBuildingId: string | null;
   /** Save operation status for the SaveStatusIndicator. */
   saveStatus: "pending" | "synced" | "error";
   /** Camera pan/zoom state. */
   camera: CameraState;
-  /** Last tick's per-resource delta for ResourceBar +/- indicators. */
   resourceDelta: ResourcePool;
   /** Tile ID currently under the mouse cursor, or null. */
   hoveredTileId: number | null;
@@ -103,6 +105,8 @@ export interface GameStore extends GameState {
   unassignWorker: (workerId: string) => void;
   researchEra: (targetEra: 2 | 3 | 4) => void;
   spawnWorker: () => void;
+  spawnUnit: (buildingId: string, unitType: UnitType) => void;
+  selectPlacedBuilding: (buildingId: string | null) => void;
   toggleAutoPlay: () => void;
 }
 
@@ -177,6 +181,7 @@ export const useGameStore = create<GameStore>((set, get) => {
 
     // UI state
     selectedBuilding: null,
+    selectedBuildingId: null,
     hoveredTileId: null,
     actionAlerts: [],
     simSpeed: 1,
@@ -222,12 +227,14 @@ export const useGameStore = create<GameStore>((set, get) => {
 
           initialWorkers = Array.from({ length: 3 }).map((_, i) => ({
             id: `w-0-${i}`,
+            unitType: "WORKER",
             state: "IDLE",
             assignedBuildingId: null,
             position: { x: CENTER_X, y: CENTER_Y },
             path: [],
             harvestTicks: 0,
             carrying: null,
+            visionRadius: 1,
           }));
 
           initialResources = {
@@ -363,6 +370,18 @@ export const useGameStore = create<GameStore>((set, get) => {
         action: { type: "SPAWN_WORKER" },
       };
       worker.postMessage(cmd);
+    },
+
+    spawnUnit: (buildingId: string, unitType: UnitType) => {
+      const cmd: WorkerInbound = {
+        type: "PLAYER_ACTION",
+        action: { type: "SPAWN_UNIT", buildingId, unitType },
+      };
+      worker.postMessage(cmd);
+    },
+
+    selectPlacedBuilding: (buildingId: string | null) => {
+      set({ selectedBuildingId: buildingId });
     },
 
     updateCamera: (updates: Partial<CameraState>) => {

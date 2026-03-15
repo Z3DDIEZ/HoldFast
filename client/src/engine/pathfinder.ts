@@ -100,6 +100,7 @@ export function findPath(
   start: TileCoordinate,
   end: TileCoordinate,
   tiles: TileState[],
+  allowFog: boolean = false,
 ): TileCoordinate[] {
   if (start.x === end.x && start.y === end.y) return [];
 
@@ -154,8 +155,9 @@ export function findPath(
       // Walkability rules:
       // - tile.walkable refers to terrain (not water)
       // - Exception: destination tile is always reachable
+      // - Scouting exception: allow walking through fog if allowFog is true
       const isEnd = nx === end.x && ny === end.y;
-      const isWalkable = tile.walkable || isEnd;
+      const isWalkable = tile.walkable || isEnd || (allowFog && !tile.visible);
 
       if (!isWalkable) continue;
 

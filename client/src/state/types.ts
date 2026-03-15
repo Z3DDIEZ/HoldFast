@@ -1,7 +1,7 @@
 import type {
   GameState as EngineGameState,
   TileState as EngineTileState,
-  WorkerState as EngineWorkerState,
+  UnitState as EngineUnitState,
   BuildingState as EngineBuildingState,
   ResourceType,
   ResourcePool,
@@ -16,7 +16,7 @@ import type { GameStore, CameraState } from "./game-store";
 export type {
   EngineGameState as GameState,
   EngineTileState as TileState,
-  EngineWorkerState as WorkerState,
+  EngineUnitState as UnitState,
   EngineBuildingState as BuildingState,
   ResourceType,
   ResourcePool,

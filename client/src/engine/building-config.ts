@@ -1,4 +1,4 @@
-import type { BuildingType, ResourcePool, ResourceType } from "./tick-types";
+import type { BuildingType, ResourcePool, ResourceType, UnitType } from "./tick-types";
 
 export interface BuildingConfig {
   id: BuildingType;
@@ -10,7 +10,13 @@ export interface BuildingConfig {
   requiredWorkers: number;
   requiredEra: 1 | 2 | 3 | 4;
   cost: Partial<ResourcePool>;
+  produces: UnitType[];
 }
+
+export const UNIT_CONFIG: Record<UnitType, { cost: Partial<ResourcePool>; visionRadius: number }> = {
+  WORKER: { cost: { food: 50 }, visionRadius: 2 },
+  SCOUT: { cost: { food: 80, wood: 20 }, visionRadius: 5 },
+};
 
 export const BUILDING_CONFIG: Record<BuildingType, BuildingConfig> = {
   TOWN_HALL: {
@@ -23,6 +29,7 @@ export const BUILDING_CONFIG: Record<BuildingType, BuildingConfig> = {
     requiredWorkers: 0,
     requiredEra: 1,
     cost: {},
+    produces: ["WORKER"],
   },
   FORAGER_HUT: {
     id: "FORAGER_HUT",
@@ -34,6 +41,7 @@ export const BUILDING_CONFIG: Record<BuildingType, BuildingConfig> = {
     requiredWorkers: 1,
     requiredEra: 1,
     cost: { wood: 5 },
+    produces: [],
   },
   LUMBER_MILL: {
     id: "LUMBER_MILL",
@@ -45,6 +53,7 @@ export const BUILDING_CONFIG: Record<BuildingType, BuildingConfig> = {
     requiredWorkers: 1,
     requiredEra: 1,
     cost: { stone: 5 },
+    produces: [],
   },
   QUARRY: {
     id: "QUARRY",
@@ -56,6 +65,7 @@ export const BUILDING_CONFIG: Record<BuildingType, BuildingConfig> = {
     requiredWorkers: 1,
     requiredEra: 1,
     cost: { wood: 5 },
+    produces: [],
   },
   STOREHOUSE: {
     id: "STOREHOUSE",
@@ -67,6 +77,7 @@ export const BUILDING_CONFIG: Record<BuildingType, BuildingConfig> = {
     requiredWorkers: 0,
     requiredEra: 1,
     cost: { wood: 15, stone: 5 },
+    produces: [],
   },
   FARM: {
     id: "FARM",
@@ -78,6 +89,7 @@ export const BUILDING_CONFIG: Record<BuildingType, BuildingConfig> = {
     requiredWorkers: 2,
     requiredEra: 2,
     cost: { wood: 20, stone: 10 },
+    produces: [],
   },
   LIBRARY: {
     id: "LIBRARY",
@@ -89,6 +101,7 @@ export const BUILDING_CONFIG: Record<BuildingType, BuildingConfig> = {
     requiredWorkers: 1,
     requiredEra: 1,
     cost: { wood: 25, stone: 20 },
+    produces: [],
   },
   BARRACKS: {
     id: "BARRACKS",
@@ -100,6 +113,7 @@ export const BUILDING_CONFIG: Record<BuildingType, BuildingConfig> = {
     requiredWorkers: 0,
     requiredEra: 3,
     cost: { wood: 30, stone: 30 },
+    produces: ["SCOUT"],
   },
 };
 

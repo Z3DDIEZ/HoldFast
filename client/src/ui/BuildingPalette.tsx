@@ -1,6 +1,6 @@
 import { useGameStore } from "../state/game-store";
-import { BUILDING_LIST } from "../engine/building-config";
-import type { ResourcePool } from "../state/types";
+import { BUILDING_LIST, BUILDING_CONFIG, UNIT_CONFIG } from "../engine/building-config";
+import type { ResourcePool, UnitType } from "../engine/tick-types";
 
 const BUILDINGS = BUILDING_LIST;
 
@@ -140,3 +140,55 @@ export function BuildingPalette() {
   );
 }
 
+function UnitProductionPanel() {
+  const selectedBuildingId = useGameStore((s) => s.selectedBuildingId);
+  const buildings = useGameStore((s) => s.buildings);
+  const resources = useGameStore((s) => s.resources);
+  const spawnUnit = useGameStore((s) => s.spawnUnit);
+
+  const selectedBuilding = buildings.find(b => b.id === selectedBuildingId);
+  if (!selectedBuilding || selectedBuilding.constructionTicksRemaining > 0) return null;
+
+  const config = BUILDING_CONFIG[selectedBuilding.type];
+  if (!config || !config.produces || config.produces.length === 0) return null;
+
+  return (
+    <div className="fixed bottom-[100px] right-4 flex flex-col gap-2 p-3 bg-[#0f0f0f]/95 border border-[#2a2a2a] backdrop-blur-sm shadow-xl">
+      <span className="text-[9px] text-[#e8e8d0] mb-2 uppercase tracking-wider font-bold">Produce Units</span>
+      {config.produces.map(unitType => {
+        const unitConfig = UNIT_CONFIG[unitType];
+        const affordable = canAfford(unitConfig.cost, resources);
+        
+        return (
+          <button
+            key={unitType}
+            disabled={!affordable}
+            onClick={() => spawnUnit(selectedBuilding.id, unitType as UnitType)}
+            className={`
+              p-2 border transition-all text-[8px] flex flex-col items-start gap-1
+              ${affordable ? "border-[#4a8f3f] bg-[#1a2a1a] hover:bg-[#2a3a2a]" : "border-[#402020] bg-[#1a0f0f] opacity-50 cursor-not-allowed"}
+            `}
+          >
+            <span className="uppercase font-bold">{unitType}</span>
+            <div className="flex gap-2">
+              {Object.entries(unitConfig.cost).map(([res, amt]) => (
+                <span key={res} style={{ color: resources[res as keyof ResourcePool] >= (amt || 0) ? RESOURCE_COLORS[res] : "#c04040" }}>
+                  {amt}{res[0].toUpperCase()}
+                </span>
+              ))}
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+export function HUD() {
+  return (
+    <>
+      <BuildingPalette />
+      <UnitProductionPanel />
+    </>
+  );
+}

@@ -2,7 +2,7 @@ import type { GameStore, CameraState } from "../state/game-store";
 import type {
   TileState,
   BuildingState,
-  WorkerState,
+  UnitState,
   ResourcePool,
   TileType,
   BuildingType,
@@ -96,6 +96,13 @@ const WORKER_STATE_COLORS: Record<string, string> = {
   STARVING: "#ff5555",
 };
 
+/** Unit base colours. */
+const UNIT_COLORS: Record<string, string> = {
+  WORKER: "#ffffff",
+  SCOUT: "#4040ff",
+};
+
+
 /** Background/fog colour. */
 const BG_COLOR = "#0a0a0a";
 
@@ -109,7 +116,7 @@ export class CanvasRenderer {
   private canvas: HTMLCanvasElement;
   private tiles: TileState[] = [];
   private buildings: BuildingState[] = [];
-  private workers: WorkerState[] = [];
+  private units: UnitState[] = [];
   private era = 1;
   private resources: ResourcePool = {
     food: 0,
@@ -149,7 +156,7 @@ export class CanvasRenderer {
   public updateState(store: GameStore, camera: CameraState) {
     this.tiles = store.tiles;
     this.buildings = store.buildings;
-    this.workers = store.workers;
+    this.units = store.workers; // Still mapped from store.workers for now
     this.era = store.era;
     this.resources = store.resources;
     this.camera = camera;
@@ -370,10 +377,10 @@ export class CanvasRenderer {
       }
     }
 
-    // ─── Workers ───
-    for (const worker of this.workers) {
-      const px = totalX + worker.position.x * this.currentTileSize;
-      const py = totalY + worker.position.y * this.currentTileSize;
+    // ─── Units (Workers/Scouts) ───
+    for (const unit of this.units) {
+      const px = totalX + unit.position.x * this.currentTileSize;
+      const py = totalY + unit.position.y * this.currentTileSize;
 
       // Frustum culling
       if (
@@ -385,24 +392,28 @@ export class CanvasRenderer {
         continue;
       }
 
-      const workerSize = Math.max(2, this.currentTileSize * 0.35);
-      const offset = (this.currentTileSize - workerSize) / 2;
+      const unitSize = Math.max(2, this.currentTileSize * 0.35);
+      const offset = (this.currentTileSize - unitSize) / 2;
 
-      // Worker body — colour by state
-      ctx.fillStyle = WORKER_STATE_COLORS[worker.state] || "#ffffff";
-      ctx.fillRect(px + offset, py + offset, workerSize, workerSize);
+      // Unit body — colour primarily by type, unless starving or special state
+      if (unit.state === "STARVING") {
+        ctx.fillStyle = WORKER_STATE_COLORS.STARVING;
+      } else {
+        ctx.fillStyle = UNIT_COLORS[unit.unitType] || "#ffffff";
+      }
+      ctx.fillRect(px + offset, py + offset, unitSize, unitSize);
 
-      // Worker outline
+      // Unit outline
       ctx.strokeStyle = "#000000";
       ctx.lineWidth = 1;
-      ctx.strokeRect(px + offset, py + offset, workerSize, workerSize);
+      ctx.strokeRect(px + offset, py + offset, unitSize, unitSize);
 
-      // Carrying indicator (small dot above worker)
-      if (worker.carrying && this.camera.zoom > 0.5) {
-        const dotSize = Math.max(2, workerSize * 0.35);
+      // Carrying indicator (small dot above unit)
+      if (unit.carrying && this.camera.zoom > 0.5) {
+        const dotSize = Math.max(2, unitSize * 0.35);
         ctx.fillStyle = "#ffff00";
         ctx.fillRect(
-          px + offset + workerSize / 2 - dotSize / 2,
+          px + offset + unitSize / 2 - dotSize / 2,
           py + offset - dotSize - 1,
           dotSize,
           dotSize,

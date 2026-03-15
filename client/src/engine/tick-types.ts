@@ -3,6 +3,9 @@
 /** The four resource types in the game economy. */
 export type ResourceType = "food" | "wood" | "stone" | "knowledge";
 
+/** All unit types defined in the game. */
+export type UnitType = "WORKER" | "SCOUT";
+
 /**
  * Tracks the current quantity of each resource.
  * Used both as absolute totals and as per-tick deltas.
@@ -96,7 +99,8 @@ export type WorkerAgentState =
   | "MOVING_TO_DEPOSIT"
   | "DEPOSITING"
   | "WAITING"
-  | "STARVING";
+  | "STARVING"
+  | "SCOUTING";
 
 /** A single unit of resource carried by a worker. */
 export interface ResourceUnit {
@@ -105,15 +109,17 @@ export interface ResourceUnit {
 }
 
 /**
- * The full state of a single worker agent.
- * Workers are the only entities that move on the map.
+ * The full state of a single unit agent.
+ * Units are the only entities that move on the map.
  */
-export interface WorkerState {
+export interface UnitState {
   /** Unique identifier generated at spawn time. */
   id: string;
+  /** Unit type (WORKER, SCOUT). */
+  unitType: UnitType;
   /** Current state machine state. */
   state: WorkerAgentState;
-  /** The building this worker is assigned to harvest from, or null. */
+  /** The building this unit is assigned to harvest from, or null. */
   assignedBuildingId: string | null;
   /** Current tile position on the map grid. */
   position: TileCoordinate;
@@ -123,7 +129,12 @@ export interface WorkerState {
   harvestTicks: number;
   /** Resource unit being carried to a deposit point, or null. */
   carrying: ResourceUnit | null;
+  /** Vision radius for revealing fog-of-war. */
+  visionRadius: number;
 }
+
+/** Alias for backward compatibility. @deprecated Use UnitState */
+export type WorkerState = UnitState;
 
 /**
  * The complete client-side game state, serialised on save.
@@ -140,8 +151,8 @@ export interface GameState {
   resources: ResourcePool;
   /** Full tile grid state (80×80 = 6400 entries). */
   tiles: TileState[];
-  /** All active worker agents. */
-  workers: WorkerState[];
+  /** All active unit agents. */
+  workers: UnitState[];
   /** All placed buildings. */
   buildings: BuildingState[];
   /** ISO timestamp of the last successful save, or null. */
@@ -160,6 +171,7 @@ export type PlayerAction =
   | { type: "ASSIGN_WORKER"; workerId: string; buildingId: string }
   | { type: "UNASSIGN_WORKER"; workerId: string }
   | { type: "RESEARCH_ERA"; targetEra: 2 | 3 | 4 }
+  | { type: "SPAWN_UNIT"; unitType: UnitType; buildingId: string }
   | { type: "SPAWN_WORKER" };
 
 /**
@@ -176,8 +188,8 @@ export interface TickResult {
   eraChanged: boolean;
   newEra?: 1 | 2 | 3 | 4;
   actionRejections: { action: PlayerAction; reason: string }[];
-  /** Full worker state for UI sync (positions, carrying, assignments). */
-  workers: WorkerState[];
+  /** Full unit state for UI sync (positions, carrying, assignments). */
+  workers: UnitState[];
   /** Full building state for UI sync. */
   buildings: BuildingState[];
   /** Updated tile ownership/visibility for rendering. */

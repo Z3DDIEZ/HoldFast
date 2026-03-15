@@ -10,9 +10,11 @@ import type {
   BuildingState,
   BuildingType,
   TileCoordinate,
+  UnitState,
+  TileState,
   WorkerState,
 } from "./tick-types";
-import { BUILDING_CONFIG } from "./building-config";
+import { BUILDING_CONFIG, UNIT_CONFIG } from "./building-config";
 import { findPath, tileIdToCoord } from "./pathfinder";
 import { expandTerritory, MAP_WIDTH } from "./map-generator";
 
@@ -46,6 +48,29 @@ let paused = false;
 let tickTimeoutId: ReturnType<typeof setTimeout> | null = null;
 let tickMs = BASE_TICK_MS;
 let eraChangedThisTick = false;
+
+/** Update visibility for all tiles within a unit's vision radius. */
+function updateVision(unit: UnitState, tiles: TileState[]) {
+  const radius = unit.visionRadius;
+  const cx = unit.position.x;
+  const cy = unit.position.y;
+
+  for (let dx = -radius; dx <= radius; dx++) {
+    for (let dy = -radius; dy <= radius; dy++) {
+      // Euclidean distance check for circular vision
+      if (dx * dx + dy * dy <= radius * radius) {
+        const nx = cx + dx;
+        const ny = cy + dy;
+        if (nx >= 0 && nx < MAP_WIDTH && ny >= 0 && ny < MAP_WIDTH) {
+          const nId = ny * MAP_WIDTH + nx;
+          if (tiles[nId]) {
+            tiles[nId].visible = true;
+          }
+        }
+      }
+    }
+  }
+}
 
 function emit(msg: WorkerOutbound) {
   if (typeof self !== "undefined" && "postMessage" in self) {
@@ -245,6 +270,7 @@ function runTick() {
 
   for (const worker of workers) {
     processWorkerStateMachine(worker, workerDepositDelta);
+    updateVision(worker, state!.tiles);
   }
 
   syncBuildingAssignments();
@@ -473,14 +499,17 @@ function validateAndApplyAction(action: PlayerAction): string | null {
       if (action.buildingType === "TOWN_HALL" && state.workers.length === 0) {
         const coord = tileIdToCoord(action.tileId);
         for (let i = 0; i < 3; i++) {
+          const config = UNIT_CONFIG.WORKER;
           state.workers.push({
             id: `w-${state.tickCount}-${i}`,
+            unitType: "WORKER",
             state: "IDLE",
             assignedBuildingId: null,
             position: { ...coord },
             path: [],
             harvestTicks: 0,
             carrying: null,
+            visionRadius: config.visionRadius,
           });
         }
         // Give starting food to prevent immediate starvation
@@ -613,26 +642,53 @@ function validateAndApplyAction(action: PlayerAction): string | null {
     }
 
     case "SPAWN_WORKER": {
-      if (state.resources.food < 50) return "INSUFFICIENT_FOOD";
-
+      // Keep for backward compatibility, delegate to SPAWN_UNIT
       const townHall = state.buildings.find((b) => b.type === "TOWN_HALL");
       if (!townHall) return "TOWN_HALL_MISSING";
+      return validateAndApplyAction({ 
+        type: "SPAWN_UNIT", 
+        unitType: "WORKER", 
+        buildingId: townHall.id 
+      });
+    }
+
+    case "SPAWN_UNIT": {
+      const b = state.buildings.find(building => building.id === action.buildingId);
+      if (!b) return "BUILDING_NOT_FOUND";
+      if (b.constructionTicksRemaining > 0) return "BUILDING_UNDER_CONSTRUCTION";
+
+      const buildingConfig = BUILDING_CONFIG[b.type];
+      if (!buildingConfig.produces.includes(action.unitType)) return "BUILDING_CANNOT_PRODUCE_UNIT";
+
+      const unitConfig = UNIT_CONFIG[action.unitType];
+      if (!unitConfig) return "UNKNOWN_UNIT_TYPE";
+
+      // Check costs
+      for (const r of Object.keys(unitConfig.cost) as (keyof ResourcePool)[]) {
+        if (state.resources[r] < (unitConfig.cost[r] || 0))
+          return "INSUFFICIENT_RESOURCES";
+      }
+
       const capacity = getHousingCapacity(state.buildings);
       if (state.workers.length >= capacity) return "INSUFFICIENT_HOUSING";
 
-      state.resources.food -= 50;
+      // Deduct costs
+      for (const r of Object.keys(unitConfig.cost) as (keyof ResourcePool)[]) {
+        state.resources[r] -= unitConfig.cost[r] || 0;
+      }
 
-      const coord = tileIdToCoord(townHall.tileId);
+      const coord = tileIdToCoord(b.tileId);
       state.workers.push({
         id: `w-${state.tickCount}-${state.workers.length}`,
+        unitType: action.unitType,
         state: "IDLE",
         assignedBuildingId: null,
         position: { ...coord },
         path: [],
         harvestTicks: 0,
         carrying: null,
+        visionRadius: unitConfig.visionRadius,
       });
-
       return null;
     }
 
@@ -651,9 +707,12 @@ function processWorkerStateMachine(
 
   switch (worker.state) {
     case "STARVING":
-      // Starving workers can still attempt to IDLE and get assigned
-      // (Their slowdown is handled above the switch)
-      worker.state = "IDLE";
+      // Starving units move slower but still follow their role
+      if (worker.unitType === "SCOUT") {
+        worker.state = "SCOUTING";
+      } else {
+        worker.state = "IDLE";
+      }
       break;
     case "IDLE":
       if (worker.assignedBuildingId) {
@@ -674,6 +733,8 @@ function processWorkerStateMachine(
           worker.state = "IDLE";
           worker.assignedBuildingId = null;
         }
+      } else if (worker.unitType === "SCOUT") {
+        worker.state = "SCOUTING";
       }
       break;
 
@@ -856,6 +917,10 @@ function processWorkerStateMachine(
         }
       }
       break;
+
+    case "SCOUTING":
+      processScouting(worker);
+      break;
   }
 }
 
@@ -874,8 +939,67 @@ function recalculatePath(worker: WorkerState): boolean {
   }
 
   const targetCoord = tileIdToCoord(targetId);
-  worker.path = findPath(worker.position, targetCoord, state.tiles);
+  worker.path = findPath(
+    worker.position,
+    targetCoord,
+    state.tiles,
+    worker.unitType === "SCOUT",
+  );
   return worker.path.length > 0;
+}
+
+function findNearestFogTile(position: TileCoordinate): number | null {
+  if (!state) return null;
+
+  let bestId: number | null = null;
+  let bestDist = Infinity;
+
+  // Scan all tiles for fog (visible: false)
+  // Optimization: we could scan in an outward spiral, but 80x80 is small enough for a linear scan
+  for (let i = 0; i < state.tiles.length; i++) {
+    const tile = state.tiles[i];
+    if (tile.visible) continue;
+
+    const coord = tileIdToCoord(i);
+    const dist = Math.abs(position.x - coord.x) + Math.abs(position.y - coord.y);
+
+    if (dist < bestDist) {
+      bestDist = dist;
+      bestId = i;
+    }
+  }
+
+  return bestId;
+}
+
+function processScouting(worker: UnitState) {
+  if (!state) return;
+
+  if (worker.path.length > 0) {
+    const next = worker.path.shift()!;
+    worker.position = next;
+    return;
+  }
+
+  // Find next fog target
+  const targetId = findNearestFogTile(worker.position);
+  if (targetId === null) {
+    worker.state = "IDLE";
+    return;
+  }
+
+  // Use a special version of findPath that ignores fog for scouting
+  const targetCoord = tileIdToCoord(targetId);
+  const path = findPath(worker.position, targetCoord, state.tiles, true); // true = allow scouting into fog
+  
+  if (path && path.length > 0) {
+    worker.path = path;
+    const next = worker.path.shift()!;
+    worker.position = next;
+  } else {
+    // If no path to fog, just idle or wander
+    worker.state = "IDLE";
+  }
 }
 
 /** Helper to find a suitable tile for autonomous placement. */
