@@ -8,7 +8,7 @@ export interface BuildingConfig {
   yieldAmount: number;
   constructionTicks: number;
   requiredWorkers: number;
-  requiredEra: 1 | 2 | 3;
+  requiredEra: 1 | 2 | 3 | 4;
   cost: Partial<ResourcePool>;
 }
 

@@ -101,7 +101,7 @@ export interface GameStore extends GameState {
   setHoveredTile: (tileId: number | null) => void;
   assignWorker: (workerId: string, buildingId: string) => void;
   unassignWorker: (workerId: string) => void;
-  researchEra: (targetEra: 2 | 3) => void;
+  researchEra: (targetEra: 2 | 3 | 4) => void;
   spawnWorker: () => void;
   toggleAutoPlay: () => void;
 }
@@ -349,7 +349,7 @@ export const useGameStore = create<GameStore>((set, get) => {
       worker.postMessage(cmd);
     },
 
-    researchEra: (targetEra: 2 | 3) => {
+    researchEra: (targetEra: 2 | 3 | 4) => {
       const cmd: WorkerInbound = {
         type: "PLAYER_ACTION",
         action: { type: "RESEARCH_ERA", targetEra },

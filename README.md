@@ -20,8 +20,9 @@ The architecture of Holdfast rigorously enforces a clear boundary of trust. The 
 - **Worker Agent Queues**: Autonomous worker entities execute defined tasks (Harvest, Deposit, Construct) while pathfinding across the mutable tile graph at one tile per tick.
 - **Auto-Play Mode**: A macro-level automation toggle that handles worker assignment and population growth (spawning), allowing the player to focus on high-level expansion and building placement.
 - **Construction & Timing**: Buildings complete over construction ticks via a construct worker loop. Simulation speed supports 1x-100x plus pause/resume.
-- **Era Progression**: Multi-tiered developmental stages unlocking progressive structures and multipliers, gated strictly by knowledge accretion and demographic milestones.
-- **Starvation Guard**: Food upkeep and starvation only activate after an operational food producer exists.
+- **Era Progression**: Multi-tiered developmental stages (up to Era 4: Imperial Age) unlocking progressive structures and multipliers, gated strictly by knowledge accretion and demographic milestones.
+- **Dynamic Infrastructure Scaling**: Automated AI logic that scales housing and storage capacity proportionally to population, breaking the standard 2400-resource cap.
+- **Starvation Guard**: Overhauled survival logic with a 75% speed penalty during famine instead of a total freeze, allowing for recovery.
 
 ## Local Development
 

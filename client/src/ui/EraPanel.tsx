@@ -17,12 +17,18 @@ const ERA_INFO = {
     description: "Defence & advanced production",
     unlocks: ["Barracks", "Walls", "Production multipliers"],
   },
+  4: {
+    name: "IMPERIAL",
+    description: "Global dominance & infinite scaling",
+    unlocks: ["Efficiency Upgrades", "Population Expansion"],
+  },
 } as const;
 
 /** Knowledge cost and population gate per era transition. */
 const ERA_REQUIREMENTS = {
   1: { knowledge: 50, workers: 3 },
   2: { knowledge: 200, workers: 8 },
+  3: { knowledge: 1000, workers: 20 },
 } as const;
 
 /** Worker state display colours. */
@@ -50,10 +56,10 @@ export function EraPanel() {
   const spawnWorker = useGameStore((s) => s.spawnWorker);
   const hasTownHall = useGameStore((s) => s.buildings.some((b) => b.type === "TOWN_HALL"));
 
-  const info = ERA_INFO[era];
-  const isMaxEra = era === 3;
+  const info = ERA_INFO[era as 1 | 2 | 3 | 4];
+  const isMaxEra = era === 4;
 
-  const reqs = !isMaxEra ? ERA_REQUIREMENTS[era as 1 | 2] : null;
+  const reqs = !isMaxEra ? ERA_REQUIREMENTS[era as 1 | 2 | 3] : null;
 
   const canResearch =
     reqs &&
@@ -75,8 +81,8 @@ export function EraPanel() {
             className="w-2 h-2"
             style={{
               backgroundColor:
-                era === 1 ? "#c8a020" : era === 2 ? "#4a8f3f" : "#c04040",
-              boxShadow: `0 0 6px ${era === 1 ? "#c8a020" : era === 2 ? "#4a8f3f" : "#c04040"}`,
+                era === 1 ? "#c8a020" : era === 2 ? "#4a8f3f" : era === 3 ? "#c04040" : "#6a60c0",
+              boxShadow: `0 0 6px ${era === 1 ? "#c8a020" : era === 2 ? "#4a8f3f" : era === 3 ? "#c04040" : "#6a60c0"}`,
             }}
           />
           <span style={{ color: "#e8e8d0", fontSize: "10px" }}>ERA {era}</span>
@@ -145,7 +151,7 @@ export function EraPanel() {
             style={{ fontSize: "8px", color: "#e8e8d0" }}
             onClick={() => {
               if (canResearch) {
-                researchEra((era + 1) as 2 | 3);
+                researchEra((era + 1) as 2 | 3 | 4);
               }
             }}
             disabled={!canResearch}
@@ -156,7 +162,7 @@ export function EraPanel() {
       ) : (
         <div className="border-b border-[#2a2a2a] pb-3">
           <span style={{ color: "#c8a020", fontSize: "8px" }}>
-            ★ MAX ERA REACHED
+            ★ {isMaxEra ? "MAX ERA REACHED" : ""}
           </span>
         </div>
       )}

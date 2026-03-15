@@ -135,7 +135,7 @@ export interface GameState {
   /** Total ticks elapsed — the simulation's sole time axis. */
   tickCount: number;
   /** Current era (1=Founding, 2=Settlement, 3=Fortification). */
-  era: 1 | 2 | 3;
+  era: 1 | 2 | 3 | 4;
   /** Current resource totals, clamped to storage capacity. */
   resources: ResourcePool;
   /** Full tile grid state (80×80 = 6400 entries). */
@@ -159,7 +159,7 @@ export type PlayerAction =
   | { type: "DEMOLISH_BUILDING"; buildingId: string }
   | { type: "ASSIGN_WORKER"; workerId: string; buildingId: string }
   | { type: "UNASSIGN_WORKER"; workerId: string }
-  | { type: "RESEARCH_ERA"; targetEra: 2 | 3 }
+  | { type: "RESEARCH_ERA"; targetEra: 2 | 3 | 4 }
   | { type: "SPAWN_WORKER" };
 
 /**
@@ -174,7 +174,7 @@ export interface TickResult {
   workerPositions: { id: string; tileId: number; state: WorkerAgentState }[];
   buildingUpdates: { id: string; staffed: boolean; operational: boolean }[];
   eraChanged: boolean;
-  newEra?: 1 | 2 | 3;
+  newEra?: 1 | 2 | 3 | 4;
   actionRejections: { action: PlayerAction; reason: string }[];
   /** Full worker state for UI sync (positions, carrying, assignments). */
   workers: WorkerState[];
