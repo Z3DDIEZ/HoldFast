@@ -58,7 +58,8 @@ function App() {
   }, []);
 
   useEffect(() => {
-    initEngine("deterministic-seed-123");
+    const randomSeed = `seed-${Math.random().toString(36).substring(2, 9)}`;
+    initEngine(randomSeed);
   }, [initEngine]);
 
   useEffect(() => {

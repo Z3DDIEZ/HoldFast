@@ -91,7 +91,7 @@ export interface GameStore extends GameState {
   autoPlay: boolean;
 
   // Actions
-  initEngine: (seed: string) => void;
+  initEngine: (seed: string, forceReset?: boolean) => void;
   pauseEngine: () => void;
   resumeEngine: () => void;
   togglePause: () => void;
@@ -107,6 +107,7 @@ export interface GameStore extends GameState {
   spawnWorker: () => void;
   spawnUnit: (buildingId: string, unitType: UnitType) => void;
   selectPlacedBuilding: (buildingId: string | null) => void;
+  reRollMap: () => void;
   toggleAutoPlay: () => void;
 }
 
@@ -193,15 +194,15 @@ export const useGameStore = create<GameStore>((set, get) => {
       offsetY: 0,
     },
 
-    initEngine: (seed: string) => {
-      let initialTiles = get().tiles;
+    initEngine: (seed: string, forceReset = false) => {
+      let initialTiles = forceReset ? [] : get().tiles;
       if (initialTiles.length === 0) {
         initialTiles = generateMap(seed);
       }
 
-      let initialWorkers: WorkerState[] = [...get().workers];
-      let initialBuildings: BuildingState[] = [...get().buildings];
-      let initialResources: ResourcePool = { ...get().resources };
+      let initialWorkers: WorkerState[] = forceReset ? [] : [...get().workers];
+      let initialBuildings: BuildingState[] = forceReset ? [] : [...get().buildings];
+      let initialResources: ResourcePool = forceReset ? { ...STARTER_RESOURCES } : { ...get().resources };
 
       if (initialBuildings.length === 0 && initialWorkers.length === 0) {
         const centerTileId = CENTER_Y * MAP_WIDTH + CENTER_X;
@@ -255,6 +256,8 @@ export const useGameStore = create<GameStore>((set, get) => {
         workers: initialWorkers,
         buildings: initialBuildings,
         resources: initialResources,
+        tickCount: forceReset ? 0 : get().tickCount,
+        era: forceReset ? 1 : get().era,
       });
 
       const {
@@ -392,6 +395,10 @@ export const useGameStore = create<GameStore>((set, get) => {
 
     setHoveredTile: (tileId: number | null) => {
       set({ hoveredTileId: tileId });
+    },
+    reRollMap: () => {
+      const newSeed = `seed-${Math.random().toString(36).substring(2, 9)}`;
+      get().initEngine(newSeed, true);
     },
     toggleAutoPlay: () => {
       const next = get().autoPlay;

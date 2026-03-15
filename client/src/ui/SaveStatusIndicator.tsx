@@ -37,15 +37,15 @@ export function SaveStatusIndicator({ status, lastSavedAt }: Props) {
   }
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#ffffff05] border border-[#ffffff08] transition-all">
       <div
-        className="w-2 h-2"
+        className={`w-1.5 h-1.5 rounded-full ${status === 'pending' ? 'animate-pulse' : ''}`}
         style={{
           backgroundColor: color,
-          boxShadow: `0 0 4px ${color}`,
+          boxShadow: `0 0 6px ${color}80`,
         }}
       />
-      <span style={{ color: "#888870", fontSize: "7px" }}>{text}</span>
+      <span className="font-bold tracking-tight text-[#888870]" style={{ fontSize: "8px" }}>{text}</span>
     </div>
   );
 }

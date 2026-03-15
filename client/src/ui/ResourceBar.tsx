@@ -116,55 +116,79 @@ export function ResourceBar() {
   const speedOptions = [1, 2, 5, 10, 100];
 
   return (
-    <div className="fixed top-0 left-0 w-full h-[48px] z-50 flex flex-row items-center px-4 gap-2 bg-[#0f0f0f]/95 border-b border-[#2a2a2a] backdrop-blur-sm">
+    <div className="fixed top-2 left-1/2 -translate-x-1/2 w-[98%] max-w-[1400px] h-[52px] z-50 flex flex-row items-center px-4 gap-6 bg-[#0f0f0f]/80 border border-[#ffffff10] backdrop-blur-[12px] rounded-xl shadow-2xl">
       {/* Game title + tick */}
-      <div className="flex flex-col mr-3 border-r border-[#2a2a2a] pr-3">
-        <span
-          style={{ color: "#e8e8d0", fontSize: "9px", letterSpacing: "0.1em" }}
-        >
-          HOLDFAST
-        </span>
-        <span style={{ color: "#555550", fontSize: "7px" }}>
-          TICK {tickCount}
-        </span>
-        <div className="flex flex-wrap gap-1 mt-1">
-          <button
-            className={`px-2 py-[1px] border transition-all ${
-              isPaused
-                ? "border-[#4aaf4a] bg-[#1a1a1a] hover:border-[#6fd16f]"
-                : "border-[#c04040] bg-[#1a1a1a] hover:border-[#e07070]"
-            }`}
-            style={{ fontSize: "6px", color: "#e8e8d0" }}
-            onClick={togglePause}
+      <div className="flex flex-col border-r border-[#ffffff10] pr-6">
+        <div className="flex items-center gap-2">
+          <span
+            className="font-bold tracking-widest text-[#e8e8d0]"
+            style={{ fontSize: "11px" }}
           >
-            {isPaused ? "RESUME" : "PAUSE"}
+            HOLDFAST
+          </span>
+          <span className="text-[#555550]" style={{ fontSize: "7px" }}>
+            v1.2.0
+          </span>
+        </div>
+        
+        <div className="flex items-center gap-3 mt-1">
+          <div className="flex items-center gap-1 bg-[#ffffff05] px-2 py-[2px] rounded border border-[#ffffff08]">
+            <span style={{ color: "#888870", fontSize: "7px" }}>TICK</span>
+            <span style={{ color: "#e8e8d0", fontSize: "7px", fontWeight: "bold" }}>{tickCount}</span>
+          </div>
+
+          <button
+            className="px-2 py-[2px] bg-[#ffffff08] hover:bg-[#ffffff15] border border-[#ffffff10] rounded transition-all text-[#e8e8d0] font-medium"
+            style={{ fontSize: "7px" }}
+            onClick={() => useGameStore.getState().reRollMap()}
+          >
+            RE-ROLL SEED
           </button>
+        </div>
+      </div>
+
+      {/* Simulation Controls */}
+      <div className="flex items-center gap-2 border-r border-[#ffffff10] pr-6">
+        <button
+          className={`flex items-center justify-center w-16 py-1 rounded border transition-all ${
+            isPaused
+              ? "border-[#4aaf4ab0] bg-[#4aaf4a10] text-[#4aaf4a] hover:bg-[#4aaf4a20]"
+              : "border-[#c04040b0] bg-[#c0404010] text-[#c04040] hover:bg-[#c0404020]"
+          }`}
+          style={{ fontSize: "8px", fontWeight: "600" }}
+          onClick={togglePause}
+        >
+          {isPaused ? "RESUME" : "PAUSE"}
+        </button>
+        
+        <div className="flex gap-1">
           {speedOptions.map((speed) => (
             <button
               key={speed}
-              className={`px-1 py-[1px] border transition-all ${
+              className={`px-2 py-1 rounded border transition-all ${
                 simSpeed === speed
-                  ? "border-[#e8e8d0] bg-[#1a1a1a]"
-                  : "border-[#2a2a2a] hover:border-[#888870]"
+                  ? "border-[#e8e8d0] bg-[#ffffff10] text-[#e8e8d0]"
+                  : "border-transparent bg-transparent text-[#888870] hover:text-[#e8e8d0] hover:bg-[#ffffff05]"
               }`}
-              style={{ fontSize: "6px", color: "#e8e8d0" }}
+              style={{ fontSize: "8px", fontWeight: "600" }}
               onClick={() => setSimSpeed(speed)}
             >
               {speed}x
             </button>
           ))}
-          <button
-            className={`px-2 py-[1px] border transition-all ml-1 ${
-              autoPlay
-                ? "border-[#6a60c0] bg-[#1a1a1a] hover:border-[#8b84d7]"
-                : "border-[#2a2a2a] bg-[#1a1a1a] hover:border-[#888870]"
-            }`}
-            style={{ fontSize: "6px", color: autoPlay ? "#8b84d7" : "#e8e8d0" }}
-            onClick={toggleAutoPlay}
-          >
-            AUTO: {autoPlay ? "ON" : "OFF"}
-          </button>
         </div>
+
+        <button
+          className={`px-2 py-1 border rounded transition-all ml-1 ${
+            autoPlay
+              ? "border-[#6a60c0b0] bg-[#6a60c015] text-[#8b84d7] hover:bg-[#6a60c025]"
+              : "border-[#ffffff10] bg-transparent text-[#888870] hover:text-[#e8e8d0] hover:bg-[#ffffff05]"
+          }`}
+          style={{ fontSize: "8px", fontWeight: "600" }}
+          onClick={toggleAutoPlay}
+        >
+          AUTO: {autoPlay ? "ON" : "OFF"}
+        </button>
       </div>
 
       {/* Resources */}

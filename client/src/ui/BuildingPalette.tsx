@@ -37,7 +37,12 @@ export function BuildingPalette() {
   );
 
   return (
-    <div className="fixed bottom-0 left-0 w-full h-[96px] z-50 flex flex-row items-center px-3 gap-2 bg-[#0f0f0f]/95 border-t border-[#2a2a2a] backdrop-blur-sm overflow-x-auto">
+    <div className="fixed bottom-3 left-1/2 -translate-x-1/2 w-[98%] max-w-[1200px] h-[92px] z-50 flex flex-row items-center px-4 gap-3 bg-[#0f0f0f]/80 border border-[#ffffff10] backdrop-blur-[12px] rounded-xl shadow-2xl overflow-x-auto scroller-none">
+      <div className="flex flex-col border-r border-[#ffffff10] pr-4 mr-1">
+        <span className="text-[#888870] font-bold tracking-tighter" style={{ fontSize: "8px" }}>BUILD</span>
+        <span className="text-[#555550]" style={{ fontSize: "6px" }}>PALETTE</span>
+      </div>
+      
       {BUILDINGS.map((b) => {
         const isTownHallPlaced = b.id === "TOWN_HALL" && hasTownHall;
         const isLocked = b.requiredEra > currentEra || isTownHallPlaced;
@@ -50,12 +55,12 @@ export function BuildingPalette() {
             key={b.id}
             className={`
               flex-shrink-0 flex flex-col items-center justify-between
-              w-[80px] h-[80px] p-2 relative select-none
-              border transition-all duration-150
-              ${isLocked ? "opacity-30 cursor-not-allowed" : ""}
-              ${!isLocked && !affordable ? "opacity-60 cursor-not-allowed" : ""}
-              ${!isDisabled ? "cursor-pointer hover:border-[#888870] hover:bg-[#1a1a1a]" : ""}
-              ${isSelected ? "border-[#e8e8d0] bg-[#1a1a1a] shadow-[0_0_8px_rgba(232,232,208,0.15)]" : "border-[#2a2a2a]"}
+              w-[76px] h-[72px] p-2 relative select-none
+              rounded-lg border transition-all duration-200
+              ${isLocked ? "opacity-20 grayscale cursor-not-allowed" : ""}
+              ${!isLocked && !affordable ? "opacity-50 cursor-not-allowed" : ""}
+              ${!isDisabled ? "cursor-pointer hover:border-[#ffffff40] hover:bg-[#ffffff08] active:scale-95" : ""}
+              ${isSelected ? "border-[#e8e8d0] bg-[#ffffff10] shadow-[0_0_15px_rgba(232,232,208,0.1)] scale-105 z-10" : "border-[#ffffff08] bg-[#ffffff03]"}
             `}
             onClick={() => {
               if (isLocked) return;
@@ -65,72 +70,87 @@ export function BuildingPalette() {
           >
             {/* Building name */}
             <span
-              className="text-center leading-tight"
+              className="text-center font-bold tracking-tight"
               style={{
                 color: isSelected ? "#ffffff" : "#e8e8d0",
-                fontSize: "7px",
+                fontSize: "8px",
               }}
             >
               {b.name}
             </span>
 
             {/* Production info */}
-            {b.resource ? (
-              <div className="flex items-center gap-1">
-                <div
-                  className="w-[5px] h-[5px]"
-                  style={{
-                    backgroundColor: RESOURCE_COLORS[b.resource] || "#888870",
-                  }}
-                />
-                <span
-                  style={{
-                    fontSize: "6px",
-                    color: RESOURCE_COLORS[b.resource] || "#888870",
-                  }}
-                >
-                  +{b.yieldAmount}/{b.ticksToHarvest}t
+            <div className="flex flex-col items-center gap-[1px]">
+              {b.resource ? (
+                <div className="flex items-center gap-1 bg-[#ffffff05] px-1 rounded">
+                  <div
+                    className="w-1.5 h-1.5 rounded-full"
+                    style={{
+                      backgroundColor: RESOURCE_COLORS[b.resource] || "#888870",
+                    }}
+                  />
+                  <span
+                    style={{
+                      fontSize: "6px",
+                      fontWeight: "600",
+                      color: RESOURCE_COLORS[b.resource] || "#888870",
+                    }}
+                  >
+                    +{b.yieldAmount}
+                  </span>
+                </div>
+              ) : b.id === "STOREHOUSE" ? (
+                <span className="font-medium text-[#888870]" style={{ fontSize: "6px" }}>
+                  +200 Cap
                 </span>
-              </div>
-            ) : b.id === "STOREHOUSE" ? (
-              <span style={{ fontSize: "6px", color: "#888870" }}>
-                +200 cap
-              </span>
-            ) : b.id === "TOWN_HALL" ? (
-              <span style={{ fontSize: "6px", color: "#c8a020" }}>
-                +3 workers
-              </span>
-            ) : (
-              <span style={{ fontSize: "6px", color: "#555550" }}>passive</span>
-            )}
+              ) : b.id === "TOWN_HALL" ? (
+                <span className="font-medium text-[#c8a020]" style={{ fontSize: "6px" }}>
+                  Start
+                </span>
+              ) : (
+                <span className="font-medium text-[#555550]" style={{ fontSize: "6px" }}>
+                  Utility
+                </span>
+              )}
+            </div>
 
             {/* Cost display */}
-            <div className="flex items-center gap-1 flex-wrap justify-center">
+            <div className="flex items-center gap-1 flex-wrap justify-center border-t border-[#ffffff08] pt-1 w-full">
               {Object.entries(b.cost).map(([resource, amount]) => (
-                <span
-                  key={resource}
-                  style={{
-                    fontSize: "6px",
-                    color:
-                      resources[resource as keyof ResourcePool] >= (amount || 0)
-                        ? RESOURCE_COLORS[resource] || "#888870"
-                        : "#c04040",
-                  }}
-                >
-                  {amount} {resource[0]?.toUpperCase()}
-                </span>
+                <div key={resource} className="flex items-center gap-0.5">
+                   <div
+                    className="w-1 h-1 rounded-full"
+                    style={{
+                      backgroundColor: RESOURCE_COLORS[resource] || "#888870",
+                    }}
+                  />
+                  <span
+                    style={{
+                      fontSize: "6px",
+                      fontWeight: "700",
+                      color:
+                        resources[resource as keyof ResourcePool] >= (amount || 0)
+                          ? "#e8e8d0"
+                          : "#c04040",
+                    }}
+                  >
+                    {amount}
+                  </span>
+                </div>
               ))}
               {Object.keys(b.cost).length === 0 && (
-                <span style={{ fontSize: "6px", color: "#4aaf4a" }}>FREE</span>
+                <span style={{ fontSize: "6px", color: "#4aaf4a", fontWeight: "bold" }}>FREE</span>
               )}
             </div>
 
             {/* Era lock overlay */}
             {isLocked && (
-              <div className="absolute inset-0 flex items-center justify-center bg-[#0f0f0f]/80">
-                <span style={{ color: "#c04040", fontSize: "7px" }}>
-                  {isTownHallPlaced ? "PLACED" : `ERA ${b.requiredEra}`}
-                </span>
+              <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-[#000000a0] backdrop-blur-[1px]">
+                <div className="px-1.5 py-0.5 rounded border border-[#ffffff20] bg-black/50">
+                  <span style={{ color: "#ffffff", fontSize: "7px", fontWeight: "bold" }}>
+                    {isTownHallPlaced ? "PLACED" : `ERA ${b.requiredEra}`}
+                  </span>
+                </div>
               </div>
             )}
           </div>
@@ -153,33 +173,42 @@ function UnitProductionPanel() {
   if (!config || !config.produces || config.produces.length === 0) return null;
 
   return (
-    <div className="fixed bottom-[100px] right-4 flex flex-col gap-2 p-3 bg-[#0f0f0f]/95 border border-[#2a2a2a] backdrop-blur-sm shadow-xl">
-      <span className="text-[9px] text-[#e8e8d0] mb-2 uppercase tracking-wider font-bold">Produce Units</span>
-      {config.produces.map(unitType => {
-        const unitConfig = UNIT_CONFIG[unitType];
-        const affordable = canAfford(unitConfig.cost, resources);
-        
-        return (
-          <button
-            key={unitType}
-            disabled={!affordable}
-            onClick={() => spawnUnit(selectedBuilding.id, unitType as UnitType)}
-            className={`
-              p-2 border transition-all text-[8px] flex flex-col items-start gap-1
-              ${affordable ? "border-[#4a8f3f] bg-[#1a2a1a] hover:bg-[#2a3a2a]" : "border-[#402020] bg-[#1a0f0f] opacity-50 cursor-not-allowed"}
-            `}
-          >
-            <span className="uppercase font-bold">{unitType}</span>
-            <div className="flex gap-2">
-              {Object.entries(unitConfig.cost).map(([res, amt]) => (
-                <span key={res} style={{ color: resources[res as keyof ResourcePool] >= (amt || 0) ? RESOURCE_COLORS[res] : "#c04040" }}>
-                  {amt}{res[0].toUpperCase()}
-                </span>
-              ))}
-            </div>
-          </button>
-        );
-      })}
+    <div className="fixed bottom-[110px] right-3 flex flex-col gap-2 p-1 bg-[#0f0f0f]/80 border border-[#ffffff10] backdrop-blur-[12px] rounded-xl shadow-2xl z-50 animate-in fade-in slide-in-from-bottom-2 duration-300">
+      <div className="px-3 py-1 border-b border-[#ffffff10] mb-1">
+        <span className="text-[10px] text-[#e8e8d0] uppercase tracking-widest font-bold">Production</span>
+      </div>
+      <div className="flex flex-col gap-1 p-2">
+        {config.produces.map(unitType => {
+          const unitConfig = UNIT_CONFIG[unitType];
+          const affordable = canAfford(unitConfig.cost, resources);
+          
+          return (
+            <button
+              key={unitType}
+              disabled={!affordable}
+              onClick={() => spawnUnit(selectedBuilding.id, unitType as UnitType)}
+              className={`
+                px-4 py-2 rounded-lg border transition-all text-left flex flex-col gap-1
+                ${affordable ? "border-[#ffffff10] bg-[#ffffff05] hover:bg-[#ffffff10] hover:border-[#ffffff20] active:scale-[0.98]" : "border-[#40202050] bg-[#40202010] opacity-50 cursor-not-allowed"}
+              `}
+            >
+              <div className="flex justify-between items-center w-full gap-4">
+                <span className="uppercase font-bold text-[#e8e8d0] tracking-tight" style={{ fontSize: "9px" }}>{unitType}</span>
+                <div className="flex gap-2">
+                  {Object.entries(unitConfig.cost).map(([res, amt]) => (
+                    <div key={res} className="flex items-center gap-1">
+                      <div className="w-1 h-1 rounded-full" style={{ backgroundColor: RESOURCE_COLORS[res] }} />
+                      <span style={{ fontSize: "8px", fontWeight: "700", color: resources[res as keyof ResourcePool] >= (amt || 0) ? "#e8e8d0" : "#c04040" }}>
+                        {amt}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

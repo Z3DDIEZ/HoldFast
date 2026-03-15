@@ -153,15 +153,18 @@ export function Minimap() {
   }, [tiles, buildings, camera]);
 
   return (
-    <div className="fixed bottom-[96px] right-0 w-[160px] h-[160px] border border-[#2a2a2a] bg-[#0f0f0f] z-40 flex items-center justify-center p-0 overflow-hidden select-none">
+    <div className="fixed bottom-[110px] right-3 w-[164px] h-[164px] rounded-xl border border-[#ffffff10] bg-[#0f0f0f]/80 backdrop-blur-[12px] shadow-2xl z-40 flex items-center justify-center p-0 overflow-hidden select-none">
       <canvas
         ref={canvasRef}
         width={MAP_DIM * TILE_SIZE}
         height={MAP_DIM * TILE_SIZE}
-        className="cursor-pointer pointer-events-auto"
+        className="cursor-pointer pointer-events-auto rounded-lg"
         style={{ imageRendering: "pixelated" }}
         onClick={handleMinimapClick}
       />
+      <div className="absolute top-1 left-2 pointer-events-none">
+        <span className="text-[#888870] font-bold tracking-tighter" style={{ fontSize: "7px" }}>RADAR</span>
+      </div>
     </div>
   );
 }

@@ -28,6 +28,7 @@ const INITIAL_VISION_RADIUS = 6;
  */
 function djb2(str: string): number {
   let hash = 5381;
+
   for (let i = 0; i < str.length; i++) {
     hash = (hash * 33) ^ str.charCodeAt(i);
   }
@@ -36,7 +37,7 @@ function djb2(str: string): number {
 
 /**
  * Generates the 80×80 tile grid from a deterministic seed.
- * Uses 2D Simplex noise for terrain assignment with biome-based thresholds.
+ * Uses fractal noise for terrain assignment with biome-based thresholds.
  *
  * @param seed — string seed for deterministic map generation
  * @returns Array of 6400 TileState objects (row-major order)
@@ -44,13 +45,25 @@ function djb2(str: string): number {
 export function generateMap(seed: string): TileState[] {
   const seedNum = djb2(seed);
   const noise2D = makeNoise2D(seedNum);
-  const scale = 0.05;
-
+  
   const tiles: TileState[] = [];
 
   for (let row = 0; row < MAP_HEIGHT; row++) {
     for (let col = 0; col < MAP_WIDTH; col++) {
-      const noiseValue = noise2D(col * scale, row * scale);
+      // Multi-octave (Fractal) Noise
+      let noiseValue = 0;
+      let amplitude = 1;
+      let frequency = 0.035;
+      let maxAmplitude = 0;
+
+      for (let i = 0; i < 4; i++) {
+        noiseValue += noise2D(col * frequency, row * frequency) * amplitude;
+        maxAmplitude += amplitude;
+        amplitude *= 0.5;
+        frequency *= 2;
+      }
+      noiseValue /= maxAmplitude;
+
       const id = row * MAP_WIDTH + col;
 
       // Manhattan distance from center
@@ -65,26 +78,41 @@ export function generateMap(seed: string): TileState[] {
 
       if (isHabitableZone) {
         // Force habitable terrain — never water in the starting zone
-        if (noiseValue < -0.05) {
-          type = "GRASSLAND"; // Override would-be water/barren
-        } else if (noiseValue < 0.1) {
-          type = "GRASSLAND";
-        } else if (noiseValue < 0.3) {
-          type = "FOREST";
+        // Guaranteed specific patches for Era 1 progression
+        const dx = col - CENTER_X;
+        const dy = row - CENTER_Y;
+
+        if (dx === 0 && dy === 0) {
+          type = "GRASSLAND"; // Town Hall spot
+        } else if (Math.abs(dx) <= 1 && Math.abs(dy) <= 1) {
+          type = "GRASSLAND"; // Immediate clearance
+        } else if (dx === 2 && dy === 0) {
+          type = "FOREST";    // Guaranteed Wood
+        } else if (dx === -2 && dy === 0) {
+          type = "STONE_DEPOSIT"; // Guaranteed Stone
+        } else if (dx === 0 && dy === 2) {
+          type = "GRASSLAND"; // Guaranteed Food spot (Grassland)
         } else {
-          type = "STONE_DEPOSIT";
+          // Fill rest of zone with noise-based selection, but no water
+          if (noiseValue < 0.1) {
+            type = "GRASSLAND";
+          } else if (noiseValue < 0.45) {
+            type = "FOREST";
+          } else {
+            type = "STONE_DEPOSIT";
+          }
         }
         walkable = true;
-      } else if (noiseValue < -0.3) {
+      } else if (noiseValue < -0.35) {
         type = "WATER";
         walkable = false;
-      } else if (noiseValue < -0.05) {
+      } else if (noiseValue < -0.1) {
         type = "BARREN";
         walkable = true;
-      } else if (noiseValue < 0.1) {
+      } else if (noiseValue < 0.15) {
         type = "GRASSLAND";
         walkable = true;
-      } else if (noiseValue < 0.3) {
+      } else if (noiseValue < 0.38) {
         type = "FOREST";
         walkable = true;
       } else {
@@ -92,13 +120,10 @@ export function generateMap(seed: string): TileState[] {
         walkable = true;
       }
 
-      // Center tile is always grassland and owned
-      const isCenter = row === CENTER_Y && col === CENTER_X;
-
       tiles.push({
         id,
-        type: isCenter ? "GRASSLAND" : type,
-        owned: isCenter,
+        type,
+        owned: row === CENTER_Y && col === CENTER_X,
         walkable,
         visible: false,
         buildingId: null,
