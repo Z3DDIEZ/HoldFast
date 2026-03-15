@@ -22,6 +22,22 @@ The architecture of Holdfast rigorously enforces a clear boundary of trust. The 
 - **Era Progression**: Multi-tiered developmental stages unlocking progressive structures and multipliers, gated strictly by knowledge accretion and demographic milestones.
 - **Starvation Guard**: Food upkeep and starvation only activate after an operational food producer exists (grace period to avoid immediate starvation).
 
+## Local Development
+
+To initialise and run the simulation locally:
+
+1. **Install Dependencies**:
+   ```bash
+   npm install
+   ```
+
+2. **Run in Development Mode**:
+   ```bash
+   npm run dev
+   ```
+
+The simulation will then be accessible at `http://localhost:5173`.
+
 ## Documentation Navigation
 
 Detailed documentation has been stratified into the following directories:

@@ -34,22 +34,22 @@ Workers can be unassigned via `UNASSIGN_WORKER`, returning them to `IDLE` state.
 
 ### Era 1: The Founding Vector
 
-| Building        | Resource | Yield                      | Harvest Ticks | Workers | Cost             | Construction Ticks |
-| --------------- | -------- | -------------------------- | ------------- | ------- | ---------------- | ------------------ |
-| **Town Hall**   | -        | Spawns 3 workers            | -             | 0       | Free             | 0                  |
-| **Forager Hut** | Food     | 1/tick                     | 3             | 1       | 10 Wood          | 3                  |
-| **Lumber Mill** | Wood     | 1/tick                     | 3             | 1       | 5 Wood, 5 Stone  | 3                  |
-| **Quarry**      | Stone    | 1/tick                     | 4             | 1       | 8 Wood           | 3                  |
-| **Storehouse**  | -        | +200 capacity              | -             | 0       | 15 Wood, 5 Stone | 4                  |
+| Building        | Resource  | Yield | Harvest Ticks | Workers | Cost             | Construction Ticks |
+| --------------- | --------- | ----- | ------------- | ------- | ---------------- | ------------------ |
+| **Town Hall**   | -         | Spawns 3 workers | -             | 0       | Free             | 0                  |
+| **Forager Hut** | Food      | 3     | 3             | 1       | 10 Wood          | 3                  |
+| **Lumber Mill** | Wood      | 2     | 3             | 1       | 5 Wood, 5 Stone  | 3                  |
+| **Quarry**      | Stone     | 2     | 4             | 1       | 8 Wood           | 3                  |
+| **Storehouse**  | -         | +200 capacity | -             | 0       | 15 Wood, 5 Stone | 4                  |
+| **Library**     | Knowledge | 2     | 4             | 1       | 25 Wood, 20 Stone | 5                  |
 
 ### Era 2: The Settlement Threshold
 
 Requires: **50 Knowledge** + **3 Workers** (player-initiated via `RESEARCH_ERA`).
 
-| Building    | Resource  | Yield  | Harvest Ticks | Workers | Cost              | Construction Ticks |
-| ----------- | --------- | ------ | ------------- | ------- | ----------------- | ------------------ |
-| **Farm**    | Food      | 2/tick | 2             | 2       | 20 Wood, 10 Stone | 4                  |
-| **Library** | Knowledge | 1/tick | 5             | 1       | 25 Wood, 20 Stone | 5                  |
+| Building | Resource | Yield | Harvest Ticks | Workers | Cost              | Construction Ticks |
+| -------- | -------- | ----- | ------------- | ------- | ----------------- | ------------------ |
+| **Farm** | Food     | 2     | 2             | 2       | 20 Wood, 10 Stone | 4                  |
 
 ### Era 3: Fortified Sovereign
 

@@ -388,12 +388,17 @@ function validateAndApplyAction(action: PlayerAction): string | null {
               ? "FOREST"
               : "STONE_DEPOSIT";
 
-        // Check N, S, E, W
+        // Check current tile and Moore neighborhood (N, S, E, W, diagonals and self)
         const neighbors = [
+          { x: cx, y: cy },
           { x: cx, y: cy - 1 },
           { x: cx, y: cy + 1 },
           { x: cx - 1, y: cy },
           { x: cx + 1, y: cy },
+          { x: cx - 1, y: cy - 1 },
+          { x: cx + 1, y: cy - 1 },
+          { x: cx - 1, y: cy + 1 },
+          { x: cx + 1, y: cy + 1 },
         ];
 
         for (const n of neighbors) {

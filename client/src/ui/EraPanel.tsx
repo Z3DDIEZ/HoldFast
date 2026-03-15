@@ -5,12 +5,12 @@ const ERA_INFO = {
   1: {
     name: "FOUNDING",
     description: "Basic resource extraction",
-    unlocks: ["Forager Hut", "Lumber Mill", "Quarry", "Storehouse"],
+    unlocks: ["Forager Hut", "Lumber Mill", "Quarry", "Storehouse", "Library"],
   },
   2: {
     name: "SETTLEMENT",
     description: "Agriculture & knowledge",
-    unlocks: ["Farm", "Library", "Storehouse upgrades"],
+    unlocks: ["Farm", "Storehouse upgrades"],
   },
   3: {
     name: "FORTIFICATION",

@@ -52,14 +52,14 @@ Workers traverse the grid at 1 tile per tick, following a deterministic task loo
 | Lumber Mill  | 1    | Wood               | Forest adjacency         |
 | Quarry       | 1    | Stone              | Stone Deposit adjacency  |
 | Storehouse   | 1    | Storage Limit +200 | Absolute spatial freedom |
+| Library      | 1    | Knowledge          | Era 1                    |
 | Farm         | 2    | Food x2            | Era 2                    |
-| Library      | 2    | Knowledge          | Era 2                    |
 | Barracks     | 3    | Defence            | Era 3                    |
 
 ## 7. Era Progression Flow
 
-1. **Era 1 - Founding**: Emphasises initial resource saturation; structures include Forager Hut, Lumber Mill, and Quarry.
-2. **Era 2 - Settlement**: Unlocks Farms and Libraries; Knowledge becomes a gating resource.
+1. **Era 1 - Founding**: Emphasises initial resource saturation; structures include Forager Hut, Lumber Mill, Quarry, and Library.
+2. **Era 2 - Settlement**: Unlocks Farms and Storehouse upgrades; Knowledge requirement: 50.
 3. **Era 3 - Fortification**: Mandates militarisation (Barracks) alongside advanced multipliers.
 
 Progression transitions mandate cumulative Knowledge acquisition and explicit demographic thresholds without time-gating constraints.

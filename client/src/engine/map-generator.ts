@@ -67,9 +67,9 @@ export function generateMap(seed: string): TileState[] {
         // Force habitable terrain — never water in the starting zone
         if (noiseValue < -0.05) {
           type = "GRASSLAND"; // Override would-be water/barren
-        } else if (noiseValue < 0.2) {
+        } else if (noiseValue < 0.1) {
           type = "GRASSLAND";
-        } else if (noiseValue < 0.5) {
+        } else if (noiseValue < 0.3) {
           type = "FOREST";
         } else {
           type = "STONE_DEPOSIT";
@@ -81,10 +81,10 @@ export function generateMap(seed: string): TileState[] {
       } else if (noiseValue < -0.05) {
         type = "BARREN";
         walkable = true;
-      } else if (noiseValue < 0.2) {
+      } else if (noiseValue < 0.1) {
         type = "GRASSLAND";
         walkable = true;
-      } else if (noiseValue < 0.5) {
+      } else if (noiseValue < 0.3) {
         type = "FOREST";
         walkable = true;
       } else {
