@@ -8,6 +8,8 @@ import type {
   TickResult,
   ResourcePool,
   BuildingState,
+  BuildingType,
+  TileCoordinate,
   WorkerState,
 } from "./tick-types";
 import { BUILDING_CONFIG } from "./building-config";
@@ -19,6 +21,11 @@ const MIN_TICK_MS = 20;
 const BASE_STORAGE = 200;
 const STOREHOUSE_BONUS = 200;
 const WORKER_UPKEEP_FOOD = 1;
+const HOUSING_CAPACITY: Partial<Record<BuildingType, number>> = {
+  TOWN_HALL: 3,
+  STOREHOUSE: 2,
+  BARRACKS: 4,
+};
 
 /** Knowledge cost to advance eras. Keyed by current era. */
 const ERA_THRESHOLDS = { 1: 50, 2: 200 } as const;
@@ -31,9 +38,12 @@ let actionQueue: PlayerAction[] = [];
 let paused = false;
 let tickTimeoutId: ReturnType<typeof setTimeout> | null = null;
 let tickMs = BASE_TICK_MS;
+let eraChangedThisTick = false;
 
 function emit(msg: WorkerOutbound) {
-  self.postMessage(msg);
+  if (typeof self !== "undefined" && "postMessage" in self) {
+    self.postMessage(msg);
+  }
 }
 
 /** Compute current storage capacity based on placed Storehouses. */
@@ -59,6 +69,76 @@ function hasDepositCapacity(
   );
 }
 
+/** Compute total housing capacity based on constructed buildings. */
+function getHousingCapacity(buildings: BuildingState[]): number {
+  return buildings.reduce((total, building) => {
+    if (building.constructionTicksRemaining > 0) return total;
+    return total + (HOUSING_CAPACITY[building.type] ?? 0);
+  }, 0);
+}
+
+function isAtTile(worker: WorkerState, tileId: number): boolean {
+  const x = tileId % MAP_WIDTH;
+  const y = Math.floor(tileId / MAP_WIDTH);
+  return worker.position.x === x && worker.position.y === y;
+}
+
+function getNearestDropoffTileId(position: TileCoordinate): number | null {
+  if (!state) return null;
+
+  const dropoffs = state.buildings
+    .filter(
+      (b) =>
+        (b.type === "STOREHOUSE" || b.type === "TOWN_HALL") &&
+        b.constructionTicksRemaining === 0,
+    )
+    .sort((a, b) => a.tileId - b.tileId);
+
+  let bestId: number | null = null;
+  let bestDist = Infinity;
+
+  for (const dropoff of dropoffs) {
+    const coord = tileIdToCoord(dropoff.tileId);
+    const dist =
+      Math.abs(position.x - coord.x) + Math.abs(position.y - coord.y);
+    if (
+      dist < bestDist ||
+      (dist === bestDist && (bestId === null || dropoff.tileId < bestId))
+    ) {
+      bestDist = dist;
+      bestId = dropoff.tileId;
+    }
+  }
+
+  return bestId;
+}
+
+function getWorkerTargetTileId(worker: WorkerState): number | null {
+  if (!state) return null;
+
+  if (
+    worker.state === "MOVING_TO_HARVEST" ||
+    worker.state === "HARVESTING" ||
+    worker.state === "MOVING_TO_CONSTRUCT" ||
+    worker.state === "CONSTRUCTING"
+  ) {
+    const building = state.buildings.find(
+      (b) => b.id === worker.assignedBuildingId,
+    );
+    return building ? building.tileId : null;
+  }
+
+  if (
+    worker.state === "MOVING_TO_DEPOSIT" ||
+    worker.state === "DEPOSITING" ||
+    worker.state === "WAITING"
+  ) {
+    return getNearestDropoffTileId(worker.position);
+  }
+
+  return null;
+}
+
 function assignConstructionWorkers() {
   if (!state) return;
 
@@ -81,7 +161,13 @@ function assignConstructionWorkers() {
     worker.state = "MOVING_TO_CONSTRUCT";
     worker.path = [];
     building.constructionWorkerId = worker.id;
-    recalculatePath(worker);
+    const pathFound = recalculatePath(worker);
+    if (!pathFound) {
+      worker.assignedBuildingId = null;
+      worker.state = "IDLE";
+      worker.path = [];
+      building.constructionWorkerId = null;
+    }
   }
 }
 
@@ -90,7 +176,7 @@ function runTick() {
 
   const snapshotStart: ResourcePool = { ...state.resources };
   const actionRejections: { action: PlayerAction; reason: string }[] = [];
-  let eraChangedThisTick = false;
+  eraChangedThisTick = false;
 
   // ─── STEP 1 — Drain action queue (FIFO) ───
   const currentActions = [...actionQueue];
@@ -369,6 +455,14 @@ function validateAndApplyAction(action: PlayerAction): string | null {
       if (bIndex === -1) return "BUILDING_NOT_FOUND";
       const b = state.buildings[bIndex];
       if (b.type === "TOWN_HALL") return "CANNOT_DEMOLISH_TOWN_HALL";
+      const housingLoss =
+        b.constructionTicksRemaining === 0 ? (HOUSING_CAPACITY[b.type] ?? 0) : 0;
+      if (housingLoss > 0) {
+        const capacityAfter = getHousingCapacity(state.buildings) - housingLoss;
+        if (state.workers.length > capacityAfter) {
+          return "HOUSING_WOULD_BE_EXCEEDED";
+        }
+      }
 
       // Unassign all workers from this building
       b.assignedWorkerIds.forEach((id) => {
@@ -472,17 +566,20 @@ function validateAndApplyAction(action: PlayerAction): string | null {
 
       state.resources.knowledge -= threshold;
       state.era = action.targetEra;
+      eraChangedThisTick = true;
       return null;
     }
 
     case "SPAWN_WORKER": {
       if (state.resources.food < 50) return "INSUFFICIENT_FOOD";
-      
+
       const townHall = state.buildings.find((b) => b.type === "TOWN_HALL");
       if (!townHall) return "TOWN_HALL_MISSING";
+      const capacity = getHousingCapacity(state.buildings);
+      if (state.workers.length >= capacity) return "INSUFFICIENT_HOUSING";
 
       state.resources.food -= 50;
-      
+
       const coord = tileIdToCoord(townHall.tileId);
       state.workers.push({
         id: `w-${state.tickCount}-${state.workers.length}`,
@@ -493,7 +590,7 @@ function validateAndApplyAction(action: PlayerAction): string | null {
         harvestTicks: 0,
         carrying: null,
       });
-      
+
       return null;
     }
 
@@ -523,7 +620,10 @@ function processWorkerStateMachine(
         } else {
           worker.state = "MOVING_TO_HARVEST";
         }
-        recalculatePath(worker);
+        const pathFound = recalculatePath(worker);
+        if (!pathFound) {
+          worker.state = "IDLE";
+        }
       }
       break;
 
@@ -583,18 +683,30 @@ function processWorkerStateMachine(
       break;
     }
 
-    case "MOVING_TO_HARVEST":
+    case "MOVING_TO_HARVEST": {
+      const targetId = getWorkerTargetTileId(worker);
+      if (targetId === null) {
+        worker.state = "IDLE";
+        worker.assignedBuildingId = null;
+        worker.path = [];
+        break;
+      }
+
       if (worker.path.length > 0) {
         const next = worker.path.shift()!;
         worker.position = next;
-        if (worker.path.length === 0) {
-          worker.state = "HARVESTING";
-        }
-      } else {
-        // Path was empty — either arrived or couldn't pathfind
+      }
+
+      if (isAtTile(worker, targetId)) {
         worker.state = "HARVESTING";
+      } else if (worker.path.length === 0) {
+        const pathFound = recalculatePath(worker);
+        if (!pathFound) {
+          worker.state = "IDLE";
+        }
       }
       break;
+    }
 
     case "HARVESTING": {
       const b = state!.buildings.find(
@@ -627,7 +739,10 @@ function processWorkerStateMachine(
         // Check if there's capacity before trying to deposit
         if (hasDepositCapacity(state!.resources, state!.buildings)) {
           worker.state = "MOVING_TO_DEPOSIT";
-          recalculatePath(worker);
+          const pathFound = recalculatePath(worker);
+          if (!pathFound) {
+            worker.state = "WAITING";
+          }
         } else {
           worker.state = "WAITING";
         }
@@ -635,22 +750,34 @@ function processWorkerStateMachine(
       break;
     }
 
-    case "MOVING_TO_DEPOSIT":
+    case "MOVING_TO_DEPOSIT": {
+      const targetId = getWorkerTargetTileId(worker);
+      if (targetId === null) {
+        worker.state = "WAITING";
+        worker.path = [];
+        break;
+      }
+
       if (worker.path.length > 0) {
         const next = worker.path.shift()!;
         worker.position = next;
-        if (worker.path.length === 0) {
-          worker.state = "DEPOSITING";
-        }
-      } else {
+      }
+
+      if (isAtTile(worker, targetId)) {
         // Check capacity on arrival
         if (hasDepositCapacity(state!.resources, state!.buildings)) {
           worker.state = "DEPOSITING";
         } else {
           worker.state = "WAITING";
         }
+      } else if (worker.path.length === 0) {
+        const pathFound = recalculatePath(worker);
+        if (!pathFound) {
+          worker.state = "WAITING";
+        }
       }
       break;
+    }
 
     case "DEPOSITING":
       if (worker.carrying) {
@@ -659,70 +786,44 @@ function processWorkerStateMachine(
         worker.carrying = null;
       }
       worker.state = "MOVING_TO_HARVEST";
-      recalculatePath(worker);
+      {
+        const pathFound = recalculatePath(worker);
+        if (!pathFound) {
+          worker.state = "IDLE";
+        }
+      }
       break;
 
     case "WAITING":
       // Re-check storage capacity each tick
       if (hasDepositCapacity(state!.resources, state!.buildings)) {
         worker.state = "MOVING_TO_DEPOSIT";
-        recalculatePath(worker);
+        const pathFound = recalculatePath(worker);
+        if (!pathFound) {
+          worker.state = "WAITING";
+        }
       }
       break;
   }
 }
 
-function recalculatePath(worker: WorkerState) {
-  if (!state) return;
+function recalculatePath(worker: WorkerState): boolean {
+  if (!state) return false;
 
-  let targetId: number | null = null;
-  if (
-    worker.state === "MOVING_TO_HARVEST" ||
-    worker.state === "HARVESTING" ||
-    worker.state === "MOVING_TO_CONSTRUCT" ||
-    worker.state === "CONSTRUCTING"
-  ) {
-    const b = state.buildings.find(
-      (building) => building.id === worker.assignedBuildingId,
-    );
-    if (b) targetId = b.tileId;
-  } else if (
-    worker.state === "MOVING_TO_DEPOSIT" ||
-    worker.state === "DEPOSITING"
-  ) {
-    // Find closest Storehouse or Town Hall for deposit
-    const dropoffs = state.buildings.filter(
-      (b) =>
-        (b.type === "STOREHOUSE" || b.type === "TOWN_HALL") &&
-        b.constructionTicksRemaining === 0,
-    );
-    let minDist = Infinity;
-    for (const d of dropoffs) {
-      const coord = tileIdToCoord(d.tileId);
-      const dist =
-        Math.abs(worker.position.x - coord.x) +
-        Math.abs(worker.position.y - coord.y);
-      if (dist < minDist) {
-        minDist = dist;
-        targetId = d.tileId;
-      }
-    }
+  const targetId = getWorkerTargetTileId(worker);
+  if (targetId === null) {
+    worker.path = [];
+    return false;
   }
 
-  if (targetId !== null) {
-    const targetCoord = tileIdToCoord(targetId);
-    worker.path = findPath(worker.position, targetCoord, state.tiles);
-    if (
-      worker.path.length === 0 &&
-      (worker.position.x !== targetCoord.x ||
-        worker.position.y !== targetCoord.y)
-    ) {
-      // No path found and not already at target
-      worker.state = "IDLE";
-    }
-  } else {
-    worker.state = "IDLE";
+  if (isAtTile(worker, targetId)) {
+    worker.path = [];
+    return true;
   }
+
+  const targetCoord = tileIdToCoord(targetId);
+  worker.path = findPath(worker.position, targetCoord, state.tiles);
+  return worker.path.length > 0;
 }
 
 function scheduleTick() {
@@ -743,33 +844,60 @@ function setSpeed(multiplier: number) {
   }
 }
 
-self.addEventListener("message", (e: MessageEvent<WorkerInbound>) => {
-  const msg = e.data;
-  switch (msg.type) {
-    case "INIT":
-      state = msg.state;
-      // Ensure all initial tiles have IDs
-      state.tiles.forEach((t, i) => (t.id = i));
-      emit({ type: "READY" });
-      scheduleTick();
-      break;
+export const __test__ = {
+  setState(nextState: GameState) {
+    state = nextState;
+    actionQueue = [];
+    paused = false;
+    tickTimeoutId = null;
+    tickMs = BASE_TICK_MS;
+    eraChangedThisTick = false;
+  },
+  getState() {
+    return state;
+  },
+  queueAction(action: PlayerAction) {
+    actionQueue.push(action);
+  },
+  clearActions() {
+    actionQueue = [];
+  },
+  runTick,
+  validateAndApplyAction,
+  processWorkerStateMachine,
+  recalculatePath,
+  getHousingCapacity,
+};
 
-    case "PLAYER_ACTION":
-      actionQueue.push(msg.action);
-      break;
+if (typeof self !== "undefined" && "addEventListener" in self) {
+  self.addEventListener("message", (e: MessageEvent<WorkerInbound>) => {
+    const msg = e.data;
+    switch (msg.type) {
+      case "INIT":
+        state = msg.state;
+        // Ensure all initial tiles have IDs
+        state.tiles.forEach((t, i) => (t.id = i));
+        emit({ type: "READY" });
+        scheduleTick();
+        break;
 
-    case "PAUSE":
-      paused = true;
-      if (tickTimeoutId) clearTimeout(tickTimeoutId);
-      break;
+      case "PLAYER_ACTION":
+        actionQueue.push(msg.action);
+        break;
 
-    case "RESUME":
-      paused = false;
-      scheduleTick();
-      break;
-    case "SET_SPEED":
-      setSpeed(msg.multiplier);
-      break;
-  }
-});
+      case "PAUSE":
+        paused = true;
+        if (tickTimeoutId) clearTimeout(tickTimeoutId);
+        break;
+
+      case "RESUME":
+        paused = false;
+        scheduleTick();
+        break;
+      case "SET_SPEED":
+        setSpeed(msg.multiplier);
+        break;
+    }
+  });
+}
 

@@ -1,0 +1,259 @@
+import { describe, expect, it } from "vitest";
+import type {
+  BuildingState,
+  GameState,
+  ResourcePool,
+  TileState,
+  WorkerState,
+  WorkerAgentState,
+  TickResult,
+} from "../../src/engine/tick-types";
+import { MAP_HEIGHT, MAP_WIDTH } from "../../src/engine/map-generator";
+import { __test__ } from "../../src/engine/simulation.worker";
+
+const emptyResources = (): ResourcePool => ({
+  food: 0,
+  wood: 0,
+  stone: 0,
+  knowledge: 0,
+});
+
+const tileId = (x: number, y: number): number => y * MAP_WIDTH + x;
+
+const createTiles = (): TileState[] => {
+  const tiles: TileState[] = [];
+  for (let y = 0; y < MAP_HEIGHT; y++) {
+    for (let x = 0; x < MAP_WIDTH; x++) {
+      tiles.push({
+        id: tileId(x, y),
+        type: "GRASSLAND",
+        owned: true,
+        walkable: true,
+        visible: true,
+        buildingId: null,
+      });
+    }
+  }
+  return tiles;
+};
+
+const createBuilding = (
+  id: string,
+  type: BuildingState["type"],
+  x: number,
+  y: number,
+  assignedWorkerIds: string[] = [],
+): BuildingState => ({
+  id,
+  type,
+  tileId: tileId(x, y),
+  tier: 1,
+  constructionTicksRemaining: 0,
+  constructionWorkerId: null,
+  staffed: false,
+  operational: false,
+  assignedWorkerIds,
+});
+
+const createWorker = (
+  id: string,
+  position: { x: number; y: number },
+  state: WorkerAgentState,
+  assignedBuildingId: string | null,
+  carrying: WorkerState["carrying"] = null,
+): WorkerState => ({
+  id,
+  state,
+  assignedBuildingId,
+  position,
+  path: [],
+  harvestTicks: 0,
+  carrying,
+});
+
+const createState = (overrides: Partial<GameState>): GameState => ({
+  mapSeed: "test-seed",
+  tickCount: 0,
+  era: 1,
+  resources: { food: 0, wood: 0, stone: 0, knowledge: 0 },
+  tiles: [],
+  workers: [],
+  buildings: [],
+  savedAt: null,
+  ...overrides,
+});
+
+const applyBuildingToTiles = (tiles: TileState[], building: BuildingState) => {
+  const tile = tiles[building.tileId];
+  tile.buildingId = building.id;
+  tile.walkable = false;
+};
+
+const blockNeighbors = (tiles: TileState[], x: number, y: number) => {
+  const neighbors = [
+    { x: x - 1, y },
+    { x: x + 1, y },
+    { x, y: y - 1 },
+    { x, y: y + 1 },
+  ];
+
+  for (const n of neighbors) {
+    if (n.x < 0 || n.x >= MAP_WIDTH || n.y < 0 || n.y >= MAP_HEIGHT) {
+      continue;
+    }
+    const tile = tiles[tileId(n.x, n.y)];
+    tile.walkable = false;
+  }
+};
+
+describe("simulation.worker", () => {
+  it("keeps workers from harvesting when pathing fails", () => {
+    const tiles = createTiles();
+    const building = createBuilding("b-1", "FORAGER_HUT", 3, 3, ["w-1"]);
+    applyBuildingToTiles(tiles, building);
+
+    const worker = createWorker(
+      "w-1",
+      { x: 1, y: 1 },
+      "MOVING_TO_HARVEST",
+      building.id,
+    );
+    blockNeighbors(tiles, worker.position.x, worker.position.y);
+
+    const state = createState({
+      tiles,
+      buildings: [building],
+      workers: [worker],
+      resources: emptyResources(),
+    });
+
+    __test__.setState(state);
+    const depositDelta = emptyResources();
+    __test__.processWorkerStateMachine(worker, depositDelta);
+
+    expect(worker.state).toBe("IDLE");
+    expect(depositDelta.food).toBe(0);
+  });
+
+  it("waits when deposit dropoff is unreachable", () => {
+    const tiles = createTiles();
+    const townHall = createBuilding("b-th", "TOWN_HALL", 5, 5);
+    applyBuildingToTiles(tiles, townHall);
+
+    const worker = createWorker(
+      "w-1",
+      { x: 1, y: 1 },
+      "MOVING_TO_DEPOSIT",
+      townHall.id,
+      { type: "wood", amount: 1 },
+    );
+    blockNeighbors(tiles, worker.position.x, worker.position.y);
+
+    const state = createState({
+      tiles,
+      buildings: [townHall],
+      workers: [worker],
+      resources: emptyResources(),
+    });
+
+    __test__.setState(state);
+    const depositDelta = emptyResources();
+    __test__.processWorkerStateMachine(worker, depositDelta);
+
+    expect(worker.state).toBe("WAITING");
+    expect(depositDelta.wood).toBe(0);
+  });
+
+  it("rejects worker spawns when housing is full", () => {
+    const tiles = createTiles();
+    const townHall = createBuilding("b-th", "TOWN_HALL", 2, 2);
+    applyBuildingToTiles(tiles, townHall);
+
+    const workers = [
+      createWorker("w-0", { x: 2, y: 2 }, "IDLE", null),
+      createWorker("w-1", { x: 2, y: 2 }, "IDLE", null),
+      createWorker("w-2", { x: 2, y: 2 }, "IDLE", null),
+    ];
+
+    const state = createState({
+      tiles,
+      buildings: [townHall],
+      workers,
+      resources: { food: 100, wood: 0, stone: 0, knowledge: 0 },
+    });
+
+    __test__.setState(state);
+    const rejection = __test__.validateAndApplyAction({
+      type: "SPAWN_WORKER",
+    });
+
+    expect(rejection).toBe("INSUFFICIENT_HOUSING");
+  });
+
+  it("blocks demolition that would exceed housing capacity", () => {
+    const tiles = createTiles();
+    const townHall = createBuilding("b-th", "TOWN_HALL", 2, 2);
+    const storehouse = createBuilding("b-sh", "STOREHOUSE", 4, 4);
+    applyBuildingToTiles(tiles, townHall);
+    applyBuildingToTiles(tiles, storehouse);
+
+    const workers = [
+      createWorker("w-0", { x: 2, y: 2 }, "IDLE", null),
+      createWorker("w-1", { x: 2, y: 2 }, "IDLE", null),
+      createWorker("w-2", { x: 2, y: 2 }, "IDLE", null),
+      createWorker("w-3", { x: 2, y: 2 }, "IDLE", null),
+      createWorker("w-4", { x: 2, y: 2 }, "IDLE", null),
+    ];
+
+    const state = createState({
+      tiles,
+      buildings: [townHall, storehouse],
+      workers,
+      resources: emptyResources(),
+    });
+
+    __test__.setState(state);
+    const rejection = __test__.validateAndApplyAction({
+      type: "DEMOLISH_BUILDING",
+      buildingId: storehouse.id,
+    });
+
+    expect(rejection).toBe("HOUSING_WOULD_BE_EXCEEDED");
+  });
+
+  it("emits eraChanged when research succeeds", () => {
+    const tiles = createTiles();
+    const townHall = createBuilding("b-th", "TOWN_HALL", 2, 2);
+    applyBuildingToTiles(tiles, townHall);
+
+    const workers = [
+      createWorker("w-0", { x: 2, y: 2 }, "IDLE", null),
+      createWorker("w-1", { x: 2, y: 2 }, "IDLE", null),
+      createWorker("w-2", { x: 2, y: 2 }, "IDLE", null),
+    ];
+
+    const messages: TickResult[] = [];
+    (globalThis as unknown as { self?: { postMessage: (msg: TickResult) => void } }).self = {
+      postMessage: (msg: TickResult) => {
+        messages.push(msg);
+      },
+    };
+
+    const state = createState({
+      tickCount: 1,
+      era: 1,
+      tiles,
+      buildings: [townHall],
+      workers,
+      resources: { food: 0, wood: 0, stone: 0, knowledge: 100 },
+    });
+
+    __test__.setState(state);
+    __test__.queueAction({ type: "RESEARCH_ERA", targetEra: 2 });
+    __test__.runTick();
+
+    const tickResult = messages.find((msg) => msg.type === "TICK_RESULT");
+    expect(tickResult?.eraChanged).toBe(true);
+    expect(tickResult?.newEra).toBe(2);
+  });
+});

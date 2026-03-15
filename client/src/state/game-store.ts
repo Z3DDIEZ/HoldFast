@@ -54,7 +54,9 @@ const ACTION_REJECTION_MESSAGES: Record<string, string> = {
   INSUFFICIENT_KNOWLEDGE: "Not enough knowledge.",
   INSUFFICIENT_POPULATION: "Not enough workers.",
   INSUFFICIENT_FOOD: "Not enough food to spawn a worker.",
+  INSUFFICIENT_HOUSING: "Not enough housing capacity.",
   TOWN_HALL_MISSING: "Town Hall required.",
+  HOUSING_WOULD_BE_EXCEEDED: "Cannot remove housing with current population.",
   UNKNOWN_ACTION: "Unknown action.",
   NO_STATE: "Simulation not ready.",
 };
