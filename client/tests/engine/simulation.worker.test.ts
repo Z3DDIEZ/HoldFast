@@ -128,11 +128,14 @@ describe("simulation.worker", () => {
     });
 
     __test__.setState(state);
-    const depositDelta = emptyResources();
-    __test__.processWorkerStateMachine(worker, depositDelta);
+    __test__.runTick();
 
     expect(worker.state).toBe("IDLE");
-    expect(depositDelta.food).toBe(0);
+    expect(worker.assignedBuildingId).toBeNull();
+    const nextState = __test__.getState();
+    const nextBuilding = nextState?.buildings.find((b) => b.id === building.id);
+    expect(nextBuilding?.assignedWorkerIds.length).toBe(0);
+    expect(nextState?.resources.food).toBe(0);
   });
 
   it("waits when deposit dropoff is unreachable", () => {
@@ -162,6 +165,61 @@ describe("simulation.worker", () => {
 
     expect(worker.state).toBe("WAITING");
     expect(depositDelta.wood).toBe(0);
+  });
+
+  it("syncs assigned worker lists from worker state", () => {
+    const tiles = createTiles();
+    const building = createBuilding("b-1", "FORAGER_HUT", 2, 2);
+    applyBuildingToTiles(tiles, building);
+
+    const worker = createWorker(
+      "w-1",
+      { x: 2, y: 3 },
+      "IDLE",
+      building.id,
+    );
+
+    const state = createState({
+      tiles,
+      buildings: [building],
+      workers: [worker],
+      resources: emptyResources(),
+    });
+
+    __test__.setState(state);
+    __test__.runTick();
+
+    const nextState = __test__.getState();
+    const nextBuilding = nextState?.buildings.find((b) => b.id === building.id);
+    expect(nextBuilding?.assignedWorkerIds).toEqual(["w-1"]);
+  });
+
+  it("marks buildings operational when fully staffed", () => {
+    const tiles = createTiles();
+    const building = createBuilding("b-1", "FORAGER_HUT", 2, 2);
+    applyBuildingToTiles(tiles, building);
+
+    const worker = createWorker(
+      "w-1",
+      { x: 2, y: 3 },
+      "IDLE",
+      building.id,
+    );
+
+    const state = createState({
+      tiles,
+      buildings: [building],
+      workers: [worker],
+      resources: emptyResources(),
+    });
+
+    __test__.setState(state);
+    __test__.runTick();
+
+    const nextState = __test__.getState();
+    const nextBuilding = nextState?.buildings.find((b) => b.id === building.id);
+    expect(nextBuilding?.staffed).toBe(true);
+    expect(nextBuilding?.operational).toBe(true);
   });
 
   it("rebuilds the deposit path when it is cleared", () => {

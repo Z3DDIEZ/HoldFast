@@ -139,6 +139,24 @@ function getWorkerTargetTileId(worker: WorkerState): number | null {
   return null;
 }
 
+function syncBuildingAssignments(): void {
+  if (!state) return;
+
+  const assignments = new Map<string, string[]>();
+  for (const worker of state.workers) {
+    if (!worker.assignedBuildingId) continue;
+    const list = assignments.get(worker.assignedBuildingId) ?? [];
+    list.push(worker.id);
+    assignments.set(worker.assignedBuildingId, list);
+  }
+
+  for (const building of state.buildings) {
+    const assigned = assignments.get(building.id) ?? [];
+    assigned.sort((a, b) => a.localeCompare(b));
+    building.assignedWorkerIds = assigned;
+  }
+}
+
 function assignConstructionWorkers() {
   if (!state) return;
 
@@ -174,6 +192,8 @@ function assignConstructionWorkers() {
 function runTick() {
   if (!state) return;
 
+  syncBuildingAssignments();
+
   const snapshotStart: ResourcePool = { ...state.resources };
   const actionRejections: { action: PlayerAction; reason: string }[] = [];
   eraChangedThisTick = false;
@@ -204,6 +224,8 @@ function runTick() {
   for (const worker of workers) {
     processWorkerStateMachine(worker, workerDepositDelta);
   }
+
+  syncBuildingAssignments();
 
   // ─── STEP 3 — Production ───
   const productionDelta: ResourcePool = {
@@ -623,6 +645,7 @@ function processWorkerStateMachine(
         const pathFound = recalculatePath(worker);
         if (!pathFound) {
           worker.state = "IDLE";
+          worker.assignedBuildingId = null;
         }
       }
       break;
@@ -703,6 +726,7 @@ function processWorkerStateMachine(
         const pathFound = recalculatePath(worker);
         if (!pathFound) {
           worker.state = "IDLE";
+          worker.assignedBuildingId = null;
         }
       }
       break;
@@ -790,6 +814,7 @@ function processWorkerStateMachine(
         const pathFound = recalculatePath(worker);
         if (!pathFound) {
           worker.state = "IDLE";
+          worker.assignedBuildingId = null;
         }
       }
       break;
