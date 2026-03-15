@@ -18,6 +18,12 @@ Entities exist as the singular kinetic agents traversing the grid structure.
 - `WAITING`: Blocked because storage is full.
 - `STARVING`: Emergency state triggered when food upkeep cannot be met (after the grace period ends).
 
+### 2. Auto-Play Mode (Autonomous AI)
+
+The simulation supports an **Auto-Play Mode** which, when toggled, executes background logic every few ticks:
+- **Auto-Assignment**: Idles workers are automatically assigned to buildings with available slots, prioritizing Food > Wood/Stone > Knowledge.
+- **Auto-Spawning**: If food surplus is healthy (> 100) and housing capacity allows, new workers are automatically spawned from the Town Hall.
+
 Agents traverse at a fixed velocity of 1 tile per tick.
 
 ### 2. Worker Assignment Rules
@@ -37,11 +43,11 @@ Workers can be unassigned via `UNASSIGN_WORKER`, returning them to `IDLE` state.
 | Building        | Resource  | Yield | Harvest Ticks | Workers | Cost             | Construction Ticks |
 | --------------- | --------- | ----- | ------------- | ------- | ---------------- | ------------------ |
 | **Town Hall**   | -         | Spawns 3 workers | -             | 0       | Free             | 0                  |
-| **Forager Hut** | Food      | 3     | 3             | 1       | 10 Wood          | 3                  |
-| **Lumber Mill** | Wood      | 2     | 3             | 1       | 5 Wood, 5 Stone  | 3                  |
-| **Quarry**      | Stone     | 2     | 4             | 1       | 8 Wood           | 3                  |
+| **Forager Hut** | Food      | 5     | 2             | 1       | 10 Wood          | 3                  |
+| **Lumber Mill** | Wood      | 4     | 3             | 1       | 5 Wood, 5 Stone  | 3                  |
+| **Quarry**      | Stone     | 3     | 4             | 1       | 8 Wood           | 3                  |
 | **Storehouse**  | -         | +200 capacity | -             | 0       | 15 Wood, 5 Stone | 4                  |
-| **Library**     | Knowledge | 2     | 4             | 1       | 25 Wood, 20 Stone | 5                  |
+| **Library**     | Knowledge | 3     | 4             | 1       | 25 Wood, 20 Stone | 5                  |
 
 ### Era 2: The Settlement Threshold
 
@@ -49,7 +55,7 @@ Requires: **50 Knowledge** + **3 Workers** (player-initiated via `RESEARCH_ERA`)
 
 | Building | Resource | Yield | Harvest Ticks | Workers | Cost              | Construction Ticks |
 | -------- | -------- | ----- | ------------- | ------- | ----------------- | ------------------ |
-| **Farm** | Food     | 2     | 2             | 2       | 20 Wood, 10 Stone | 4                  |
+| **Farm** | Food     | 10     | 2             | 2       | 20 Wood, 10 Stone | 4                  |
 
 ### Era 3: Fortified Sovereign
 

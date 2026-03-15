@@ -146,6 +146,8 @@ export interface GameState {
   buildings: BuildingState[];
   /** ISO timestamp of the last successful save, or null. */
   savedAt: string | null;
+  /** Whether the simulation is in autonomous mode. */
+  autoPlay: boolean;
 }
 
 /**
@@ -188,7 +190,8 @@ export type WorkerInbound =
   | { type: "PLAYER_ACTION"; action: PlayerAction }
   | { type: "PAUSE" }
   | { type: "RESUME" }
-  | { type: "SET_SPEED"; multiplier: number };
+  | { type: "SET_SPEED"; multiplier: number }
+  | { type: "TOGGLE_AUTO_PLAY"; enabled: boolean };
 
 /** Messages sent from the Web Worker to the main thread. */
 export type WorkerOutbound =

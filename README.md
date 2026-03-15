@@ -18,25 +18,30 @@ The architecture of Holdfast rigorously enforces a clear boundary of trust. The 
 
 - **Procedural Generation**: 80x80 tile grids generated deterministically via 2D Simplex Noise, populating dynamic biomes and resource distributions that respond organically to settlement expansion.
 - **Worker Agent Queues**: Autonomous worker entities execute defined tasks (Harvest, Deposit, Construct) while pathfinding across the mutable tile graph at one tile per tick.
+- **Auto-Play Mode**: A macro-level automation toggle that handles worker assignment and population growth (spawning), allowing the player to focus on high-level expansion and building placement.
 - **Construction & Timing**: Buildings complete over construction ticks via a construct worker loop. Simulation speed supports 1x-100x plus pause/resume.
 - **Era Progression**: Multi-tiered developmental stages unlocking progressive structures and multipliers, gated strictly by knowledge accretion and demographic milestones.
-- **Starvation Guard**: Food upkeep and starvation only activate after an operational food producer exists (grace period to avoid immediate starvation).
+- **Starvation Guard**: Food upkeep and starvation only activate after an operational food producer exists.
 
 ## Local Development
 
 To initialise and run the simulation locally:
 
-1. **Install Dependencies**:
-   ```bash
-   npm install
-   ```
+### 1. Frontend (React + Vite)
+```bash
+# Navigate to client if necessary
+npm install
+npm run dev
+```
+The UI will be accessible at `http://localhost:5173`.
 
-2. **Run in Development Mode**:
-   ```bash
-   npm run dev
-   ```
-
-The simulation will then be accessible at `http://localhost:5173`.
+### 2. Backend (.NET 9)
+```bash
+# Navigate to HoldFast.Api
+dotnet restore
+dotnet run
+```
+The API will be accessible at `http://localhost:5000` (or as configured).
 
 ## Documentation Navigation
 

@@ -111,6 +111,8 @@ export function ResourceBar() {
   const setSimSpeed = useGameStore((s) => s.setSimSpeed);
   const isPaused = useGameStore((s) => s.isPaused);
   const togglePause = useGameStore((s) => s.togglePause);
+  const autoPlay = useGameStore((s) => s.autoPlay);
+  const toggleAutoPlay = useGameStore((s) => s.toggleAutoPlay);
   const speedOptions = [1, 2, 5, 10, 100];
 
   return (
@@ -151,6 +153,17 @@ export function ResourceBar() {
               {speed}x
             </button>
           ))}
+          <button
+            className={`px-2 py-[1px] border transition-all ml-1 ${
+              autoPlay
+                ? "border-[#6a60c0] bg-[#1a1a1a] hover:border-[#8b84d7]"
+                : "border-[#2a2a2a] bg-[#1a1a1a] hover:border-[#888870]"
+            }`}
+            style={{ fontSize: "6px", color: autoPlay ? "#8b84d7" : "#e8e8d0" }}
+            onClick={toggleAutoPlay}
+          >
+            AUTO: {autoPlay ? "ON" : "OFF"}
+          </button>
         </div>
       </div>
 

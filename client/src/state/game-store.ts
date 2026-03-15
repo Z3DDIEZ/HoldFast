@@ -85,6 +85,8 @@ export interface GameStore extends GameState {
   simSpeed: number;
   /** Whether the simulation is currently paused. */
   isPaused: boolean;
+  /** Whether Auto-Play is enabled. */
+  autoPlay: boolean;
 
   // Actions
   initEngine: (seed: string) => void;
@@ -101,6 +103,7 @@ export interface GameStore extends GameState {
   unassignWorker: (workerId: string) => void;
   researchEra: (targetEra: 2 | 3) => void;
   spawnWorker: () => void;
+  toggleAutoPlay: () => void;
 }
 
 const worker = new Worker(
@@ -178,6 +181,7 @@ export const useGameStore = create<GameStore>((set, get) => {
     actionAlerts: [],
     simSpeed: 1,
     isPaused: false,
+    autoPlay: false,
     camera: {
       zoom: 1.0,
       offsetX: 0,
@@ -265,6 +269,7 @@ export const useGameStore = create<GameStore>((set, get) => {
         workers,
         buildings,
         savedAt,
+        autoPlay: get().autoPlay,
       };
 
       const cmd: WorkerInbound = { type: "INIT", state: initialState };
@@ -368,6 +373,11 @@ export const useGameStore = create<GameStore>((set, get) => {
 
     setHoveredTile: (tileId: number | null) => {
       set({ hoveredTileId: tileId });
+    },
+    toggleAutoPlay: () => {
+      const next = get().autoPlay;
+      set({ autoPlay: !next });
+      worker.postMessage({ type: "TOGGLE_AUTO_PLAY", enabled: !next });
     },
   };
 });

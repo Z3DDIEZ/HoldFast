@@ -212,6 +212,11 @@ function runTick() {
   // Assign idle workers to construction tasks (deterministic order)
   assignConstructionWorkers();
 
+  // If Auto-Play is enabled, perform autonomous actions
+  if (state.autoPlay) {
+    runAutoPlay();
+  }
+
   // ─── STEP 2 — Evaluate worker state machines ───
   const workers = [...state.workers].sort((a, b) => a.id.localeCompare(b.id));
   const workerDepositDelta: ResourcePool = {
@@ -856,6 +861,51 @@ function recalculatePath(worker: WorkerState): boolean {
   return worker.path.length > 0;
 }
 
+/** Autonomous logic for worker assignment and population growth. */
+function runAutoPlay() {
+  if (!state || !state.autoPlay) return;
+
+  // 1. Auto-assign idle workers to productive buildings
+  const idleWorkers = state.workers.filter(
+    (w) => w.state === "IDLE" && !w.assignedBuildingId,
+  );
+  if (idleWorkers.length > 0) {
+    const assignableBuildings = state.buildings.filter((b) => {
+      const config = BUILDING_CONFIG[b.type];
+      return (
+        b.constructionTicksRemaining === 0 &&
+        config.resource &&
+        b.assignedWorkerIds.length < config.requiredWorkers
+      );
+    });
+
+    for (const worker of idleWorkers) {
+      if (assignableBuildings.length === 0) break;
+
+      // Pick first available building
+      const b = assignableBuildings[0];
+      validateAndApplyAction({
+        type: "ASSIGN_WORKER",
+        workerId: worker.id,
+        buildingId: b.id,
+      });
+
+      // Refresh assignable list if this one is full
+      const config = BUILDING_CONFIG[b.type];
+      if (b.assignedWorkerIds.length >= config.requiredWorkers) {
+        assignableBuildings.shift();
+      }
+    }
+  }
+
+  // 2. Auto-spawn workers if food surplus is healthy
+  // Threshold: food > 100 AND housing capacity available
+  const capacity = getHousingCapacity(state.buildings);
+  if (state.resources.food > 100 && state.workers.length < capacity) {
+    validateAndApplyAction({ type: "SPAWN_WORKER" });
+  }
+}
+
 function scheduleTick() {
   if (paused) return;
   tickTimeoutId = setTimeout(() => {
@@ -926,6 +976,9 @@ if (typeof self !== "undefined" && "addEventListener" in self) {
         break;
       case "SET_SPEED":
         setSpeed(msg.multiplier);
+        break;
+      case "TOGGLE_AUTO_PLAY":
+        if (state) state.autoPlay = msg.enabled;
         break;
     }
   });
