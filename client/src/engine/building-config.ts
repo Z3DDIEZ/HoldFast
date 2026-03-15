@@ -33,7 +33,7 @@ export const BUILDING_CONFIG: Record<BuildingType, BuildingConfig> = {
     constructionTicks: 3,
     requiredWorkers: 1,
     requiredEra: 1,
-    cost: { wood: 10 },
+    cost: { wood: 5 },
   },
   LUMBER_MILL: {
     id: "LUMBER_MILL",
@@ -44,7 +44,7 @@ export const BUILDING_CONFIG: Record<BuildingType, BuildingConfig> = {
     constructionTicks: 3,
     requiredWorkers: 1,
     requiredEra: 1,
-    cost: { wood: 5, stone: 5 },
+    cost: { stone: 5 },
   },
   QUARRY: {
     id: "QUARRY",
@@ -55,7 +55,7 @@ export const BUILDING_CONFIG: Record<BuildingType, BuildingConfig> = {
     constructionTicks: 3,
     requiredWorkers: 1,
     requiredEra: 1,
-    cost: { wood: 8 },
+    cost: { wood: 5 },
   },
   STOREHOUSE: {
     id: "STOREHOUSE",

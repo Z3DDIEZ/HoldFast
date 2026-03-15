@@ -178,7 +178,15 @@ function assignConstructionWorkers() {
     )
     .sort((a, b) => a.id.localeCompare(b.id));
 
+  // Cap construction workers to 25% of population (min 1, max 5) to prevent stalling economy
+  const currentlyBuilding = state.workers.filter(w => w.state === "MOVING_TO_CONSTRUCT" || w.state === "CONSTRUCTING").length;
+  const constructionCap = Math.max(1, Math.min(5, Math.floor(state.workers.length * 0.25)));
+  
+  if (currentlyBuilding >= constructionCap) return;
+  let assignmentsMade = 0;
+
   for (const building of pendingBuildings) {
+    if (currentlyBuilding + assignmentsMade >= constructionCap) break;
     const worker = idleWorkers.shift();
     if (!worker) break;
 
@@ -192,6 +200,8 @@ function assignConstructionWorkers() {
       worker.state = "IDLE";
       worker.path = [];
       building.constructionWorkerId = null;
+    } else {
+      assignmentsMade++;
     }
   }
 }
@@ -267,9 +277,6 @@ function runTick() {
 
     if (b.operational && config.resource) {
       productionDelta[config.resource] += config.yieldAmount;
-      if (config.resource === "food") {
-        // hasFoodProducer check handled later
-      }
     }
     buildingUpdates.push({
       id: b.id,
@@ -447,7 +454,6 @@ function validateAndApplyAction(action: PlayerAction): string | null {
       };
       state.buildings.push(building);
       tile.buildingId = building.id;
-      tile.walkable = false;
 
       // Expand territory around the new building
       expandTerritory(state.tiles, action.tileId, 3, 5);
@@ -917,9 +923,20 @@ function findAutoPlacementTile(buildingType: BuildingType): number | null {
       return { i, score };
     });
 
+    const townHall = state.buildings.find(b => b.type === "TOWN_HALL");
+    const refCoord = townHall ? tileIdToCoord(townHall.tileId) : { x: 40, y: 40 };
+
     const best = scored
       .filter((s) => s.score > 0)
-      .sort((a, b) => b.score - a.score)[0];
+      .sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        // Tie-breaker: distance to Town Hall
+        const ac = tileIdToCoord(a.i);
+        const bc = tileIdToCoord(b.i);
+        const distA = Math.abs(ac.x - refCoord.x) + Math.abs(ac.y - refCoord.y);
+        const distB = Math.abs(bc.x - refCoord.x) + Math.abs(bc.y - refCoord.y);
+        return distA - distB;
+      })[0];
     if (best) return best.i;
   }
 
@@ -960,7 +977,7 @@ function runAutoPlay() {
     (w) => w.state === "IDLE" && !w.assignedBuildingId,
   );
 
-  if (pendingConstruction.length > 0 && idleForConstruction.length === 0) {
+  if (pendingConstruction.length > 0 && idleForConstruction.length === 0 && state.resources.wood >= 10) {
     // Break a harvester to go build
     const harvestWorker = state.workers.find(
       (w) =>
@@ -1007,10 +1024,11 @@ function runAutoPlay() {
   if (understaffed.length > 0) {
     const sCap = getStorageCapacity(state.buildings);
     const pWeights: Record<string, number> = { 
-      knowledge: state.resources.knowledge >= sCap ? 0 : (state.resources.knowledge < 20 ? 100 : 20), 
+      // Higher knowledge priority in Era 3 to reach 1000 threshold
+      knowledge: state.resources.knowledge >= sCap ? 0 : (state.era === 3 ? 100 : (state.resources.knowledge < 20 ? 100 : 20)), 
       stone: state.resources.stone >= sCap ? 0 : 5, 
       food: state.resources.food < 50 ? 1000 : (state.resources.food >= sCap ? 0 : 2), 
-      wood: state.resources.wood >= sCap ? 0 : 1 
+      wood: state.resources.wood >= sCap ? 0 : 20 
     };
   
     // Proactive Food Scaling: Check delta, not just absolute counts
@@ -1021,7 +1039,9 @@ function runAutoPlay() {
       const config = BUILDING_CONFIG[type];
       const res = config.resource;
       const bFound = state!.buildings.find(b => b.type === type && b.constructionTicksRemaining > 0);
-      if (bFound) return 0;
+      
+      // Construction score: only top priority if we have some wood buffer
+      if (bFound) return state!.resources.wood < 8 ? 50 : 0; 
 
       return res ? (state!.resources[res] || 0) / (pWeights[res] || 1) : Infinity;
     };
@@ -1093,11 +1113,15 @@ function runAutoPlay() {
     if (state.era >= 3 && type === "FARM") {
       targetCount = Math.max(targetCount, Math.ceil(state.workers.length / 4) + 1);
     }
+
+    if (state.era >= 3 && (type === "LUMBER_MILL" || type === "QUARRY")) {
+      targetCount = Math.max(targetCount, Math.ceil(state.workers.length / 4));
+    }
     
-    // Proactive scale: If food is critically low or population is high, boost farm goal
-    if ((state.resources.food < 100 || state.workers.length > 10) && type === "FARM") {
-      const currentFarms = state.buildings.filter(b => b.type === "FARM" || b.type === "FORAGER_HUT").length;
-      targetCount = Math.max(targetCount, currentFarms + 1);
+    // Proactive scale: Ensure food supply remains stable as population grows
+    if (type === "FARM") {
+      // 1 Farm per 3.5 workers is generally stable
+      targetCount = Math.max(targetCount, Math.ceil(state.workers.length / 3.5));
     }
 
     if (state.era >= 3 && type === "STOREHOUSE") {
@@ -1174,15 +1198,16 @@ function runAutoPlay() {
           knowledge: state!.resources.knowledge >= storageCap ? 0 : (state!.resources.knowledge < 20 ? 100 : 20), 
           stone: state!.resources.stone >= storageCap ? 0 : 5, 
           food: state!.resources.food < 50 ? 1000 : (state!.resources.food >= storageCap ? 0 : 2), 
-          wood: state!.resources.wood >= storageCap ? 0 : 1 
+          wood: state!.resources.wood >= storageCap ? 0 : 20 
         };
         
-        // Prioritize construction first 
-        if (a.constructionTicksRemaining > 0 && b.constructionTicksRemaining === 0) return -1;
-        if (b.constructionTicksRemaining > 0 && a.constructionTicksRemaining === 0) return 1;
+        // Prioritize construction first, but only if wood is available
+        const hasWoodBuffer = state!.resources.wood >= 8;
+        if (hasWoodBuffer && a.constructionTicksRemaining > 0 && b.constructionTicksRemaining === 0) return -1;
+        if (hasWoodBuffer && b.constructionTicksRemaining > 0 && a.constructionTicksRemaining === 0) return 1;
 
-        const scoreA = (state!.resources[confA.resource!] || 0) / (p[confA.resource!] || 1);
-        const scoreB = (state!.resources[confB.resource!] || 0) / (p[confB.resource!] || 1);
+        const scoreA = (confA.resource ? (state!.resources[confA.resource] || 0) : 0) / (p[confA.resource || ""] || 1);
+        const scoreB = (confB.resource ? (state!.resources[confB.resource] || 0) : 0) / (p[confB.resource || ""] || 1);
         
         return scoreA - scoreB; // Assign to the "most needed" (lowest weighted score)
       });

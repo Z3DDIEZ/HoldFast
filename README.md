@@ -21,8 +21,10 @@ The architecture of Holdfast rigorously enforces a clear boundary of trust. The 
 - **Auto-Play Mode**: A macro-level automation toggle that handles worker assignment and population growth (spawning), allowing the player to focus on high-level expansion and building placement.
 - **Construction & Timing**: Buildings complete over construction ticks via a construct worker loop. Simulation speed supports 1x-100x plus pause/resume.
 - **Era Progression**: Multi-tiered developmental stages (up to Era 4: Imperial Age) unlocking progressive structures and multipliers, gated strictly by knowledge accretion and demographic milestones.
-- **Dynamic Infrastructure Scaling**: Automated AI logic that scales housing and storage capacity proportionally to population, breaking the standard 2400-resource cap.
-- **Starvation Guard**: Overhauled survival logic with a 75% speed penalty during famine instead of a total freeze, allowing for recovery.
+- **Dynamic Infrastructure Scaling**: Automated AI logic that scales housing and storage capacity proportionally to population (1 Storehouse per 8 workers, 1 Farm per 3.5 workers).
+- **Survival Engine Recovery**: Overhauled survival logic with a 75% speed penalty during famine instead of a total freeze.
+- **Construction & Stability**: Implemented construction worker caps (25% population) and building walkability to prevent worker-trapping deadlocks and infinite growth loops.
+- **Resource Balancing**: Resolved "Wood Crisis" via prioritized weighting and circular costing fixes (Lumber Mill costs Stone, Quarry costs Wood).
 
 ## Local Development
 

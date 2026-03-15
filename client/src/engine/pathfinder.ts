@@ -152,11 +152,10 @@ export function findPath(
       const tile = tiles[nId];
 
       // Walkability rules:
-      // - tile.walkable must be true
-      // - tile must not have a building on it (buildingId === null)
-      // - Exception: destination tile is always reachable (building entrance)
+      // - tile.walkable refers to terrain (not water)
+      // - Exception: destination tile is always reachable
       const isEnd = nx === end.x && ny === end.y;
-      const isWalkable = (tile.walkable && tile.buildingId === null) || isEnd;
+      const isWalkable = tile.walkable || isEnd;
 
       if (!isWalkable) continue;
 
