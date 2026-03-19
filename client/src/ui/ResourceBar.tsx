@@ -101,9 +101,9 @@ function ResourceItem({
 
 /**
  * Top-bar HUD displaying resource totals, per-tick deltas,
- * tick counter, and save status.
+ * tick counter, civilization info, and save status.
  */
-export function ResourceBar({ onChooseCiv }: { onChooseCiv: () => void }) {
+export function ResourceBar() {
   const resources = useGameStore((s) => s.resources);
   const resourceDelta = useGameStore((s) => s.resourceDelta);
   const saveStatus = useGameStore((s) => s.saveStatus);
@@ -115,11 +115,13 @@ export function ResourceBar({ onChooseCiv }: { onChooseCiv: () => void }) {
   const togglePause = useGameStore((s) => s.togglePause);
   const autoPlay = useGameStore((s) => s.autoPlay);
   const toggleAutoPlay = useGameStore((s) => s.toggleAutoPlay);
-  const civilizationId = useGameStore((s) => s.civilizationId);
+  const playerCivId = useGameStore((s) => s.playerCivId);
   const reRollMap = useGameStore((s) => s.reRollMap);
+  const workers = useGameStore((s) => s.workers);
 
-  const civ = getCivilization(civilizationId);
-  const speedOptions = [1, 2, 5, 10, 100];
+  const civ = getCivilization(playerCivId);
+  const speedOptions = [1, 2, 5, 10, 100, 1000];
+  const playerWorkerCount = workers.filter(w => w.ownerId === playerCivId).length;
 
   return (
     <div className="fixed top-2 left-1/2 -translate-x-1/2 w-[98%] max-w-[1400px] h-[52px] z-50 flex flex-row items-center px-4 gap-6 bg-[#0f0f0f]/80 border border-[#ffffff10] backdrop-blur-[12px] rounded-xl shadow-2xl">
@@ -132,8 +134,11 @@ export function ResourceBar({ onChooseCiv }: { onChooseCiv: () => void }) {
           >
             HOLDFAST
           </span>
-          <span className="text-[#555550]" style={{ fontSize: "7px" }}>
-            v1.2.0
+          <span
+            className="px-1 py-[1px] rounded border text-[7px] font-bold tracking-wide"
+            style={{ color: civ.color, borderColor: `${civ.color}40`, backgroundColor: `${civ.color}10` }}
+          >
+            {civ.name.toUpperCase()}
           </span>
         </div>
         
@@ -143,20 +148,17 @@ export function ResourceBar({ onChooseCiv }: { onChooseCiv: () => void }) {
             <span style={{ color: "#e8e8d0", fontSize: "7px", fontWeight: "bold" }}>{tickCount}</span>
           </div>
 
+          <div className="flex items-center gap-1 bg-[#ffffff05] px-2 py-[2px] rounded border border-[#ffffff08]">
+            <span style={{ color: "#888870", fontSize: "7px" }}>POP</span>
+            <span style={{ color: "#e8e8d0", fontSize: "7px", fontWeight: "bold" }}>{playerWorkerCount}</span>
+          </div>
+
           <button
             className="px-2 py-[2px] bg-[#ffffff08] hover:bg-[#ffffff15] border border-[#ffffff10] rounded transition-all text-[#e8e8d0] font-medium"
             style={{ fontSize: "7px" }}
             onClick={() => reRollMap()}
           >
             RE-ROLL SEED
-          </button>
-
-          <button
-            className="px-2 py-[2px] bg-[#ffffff08] hover:bg-[#ffffff15] border border-[#ffffff10] rounded transition-all font-medium"
-            style={{ fontSize: "7px", color: civ.color }}
-            onClick={onChooseCiv}
-          >
-            CIV: {civ.name.toUpperCase()}
           </button>
         </div>
       </div>

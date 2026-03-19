@@ -20,10 +20,11 @@ Player interactions - such as structural designation, spatial reassignments, or 
 ## 3. Topographical Map Constraints
 
 - **Dimensions**: Fixed 80x80 tile configuration.
-- **Generation Engine**: Procedurally instantiated via 2D Simplex Noise.
+- **Generation Engine**: Procedurally instantiated via 2D Simplex Noise with a deterministic seed.
 - **Biomes & Tile Typologies**: Grassland, Forest, Stone Deposit, Water, Barren.
 - **Resource Placements**: Nodes are permanently distributed at generation time.
-- **Fog of War**: Visibility radius expands as the settlement footprint grows.
+- **Spawn Zones**: Up to 4 distinctly separated corner spawn locations, enforcing guaranteed habitable space free of water tiles.
+- **Fog of War**: Visibility radius expands as the settlement footprint grows, individually tracked per Civilization.
 
 ## 4. Resource Economy
 

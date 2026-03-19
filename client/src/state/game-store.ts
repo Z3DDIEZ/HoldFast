@@ -7,16 +7,19 @@ import type {
   UnitState as WorkerState,
   UnitType,
   CivilizationId,
+  CivRuntimeState,
+  TileState,
 } from "../engine/tick-types";
 import type { WorkerInbound, WorkerOutbound } from "../engine/tick-types";
 import { getCivilization } from "../engine/civilizations";
+import { CIVILIZATION_LIST } from "../engine/civilizations";
 import {
-  generateMap,
-  CENTER_X,
-  CENTER_Y,
+  generateMultiStartMap,
+  getCornerSpawns,
   MAP_WIDTH,
   expandTerritory,
 } from "../engine/map-generator";
+import { UNIT_CONFIG } from "../engine/building-config";
 
 /** Camera pan/zoom state for the canvas renderer. */
 export interface CameraState {
@@ -62,6 +65,7 @@ const ACTION_REJECTION_MESSAGES: Record<string, string> = {
   HOUSING_WOULD_BE_EXCEEDED: "Cannot remove housing with current population.",
   UNKNOWN_ACTION: "Unknown action.",
   NO_STATE: "Simulation not ready.",
+  NO_CIV_STATE: "Civilization state not found.",
 };
 
 let alertCounter = 0;
@@ -71,31 +75,40 @@ function formatActionRejection(reason: string): string {
 }
 
 /** Extended game store combining engine state with UI-only fields. */
-export interface GameStore extends GameState {
-  /** Currently selected building type for placement, or null. */
-  selectedBuilding: BuildingType | null;
-  /** Currently selected placed building instance, or null. */
-  selectedBuildingId: string | null;
-  /** Save operation status for the SaveStatusIndicator. */
-  saveStatus: "pending" | "synced" | "error";
-  /** Camera pan/zoom state. */
-  camera: CameraState;
+export interface GameStore {
+  // --- Derived from player's CivRuntimeState ---
+  era: 1 | 2 | 3 | 4;
+  resources: ResourcePool;
   resourceDelta: ResourcePool;
-  /** Tile ID currently under the mouse cursor, or null. */
+
+  // --- Full game state ---
+  mapSeed: string;
+  tickCount: number;
+  savedAt: string | null;
+  tiles: TileState[];
+  workers: WorkerState[];
+  buildings: BuildingState[];
+
+  // --- Multi-civ fields ---
+  playerCivId: CivilizationId;
+  activeCivs: CivilizationId[];
+  civStates: Record<string, CivRuntimeState>;
+
+  // --- UI state ---
+  selectedBuilding: BuildingType | null;
+  selectedBuildingId: string | null;
+  saveStatus: "pending" | "synced" | "error";
+  camera: CameraState;
   hoveredTileId: number | null;
-  /** Action rejection alerts surfaced to the UI. */
   actionAlerts: ActionAlert[];
-  /** Current simulation speed multiplier (1x, 2x, 5x, 10x, 100x). */
   simSpeed: number;
-  /** Whether the simulation is currently paused. */
   isPaused: boolean;
-  /** Whether Auto-Play is enabled. */
   autoPlay: boolean;
-  /** The civilization chosen by the player. */
-  civilizationId: CivilizationId;
+  /** Whether the game has started (civ selected, engine initialized). */
+  gameStarted: boolean;
 
   // Actions
-  initEngine: (seed: string, civilizationId?: CivilizationId, forceReset?: boolean) => void;
+  initEngine: (seed: string, playerCivId: CivilizationId) => void;
   pauseEngine: () => void;
   resumeEngine: () => void;
   togglePause: () => void;
@@ -146,16 +159,19 @@ export const useGameStore = create<GameStore>((set, get) => {
   worker.addEventListener("message", (e: MessageEvent<WorkerOutbound>) => {
     const event = e.data;
     switch (event.type) {
-      case "TICK_RESULT":
+      case "TICK_RESULT": {
+        const playerCivState = event.civStates[event.playerCivId];
         set({
           tickCount: event.tickCount,
-          resources: event.resourceTotals,
+          // Derive player-visible state from their CivRuntimeState
+          resources: playerCivState ? { ...playerCivState.resources } : get().resources,
           resourceDelta: event.resourceDelta,
-          era: event.newEra || get().era,
+          era: playerCivState?.era || get().era,
           // Full state sync from worker
           workers: event.workers,
           buildings: event.buildings,
           tiles: event.tiles,
+          civStates: event.civStates,
         });
         if (event.actionRejections.length > 0) {
           event.actionRejections.forEach((rejection) => {
@@ -163,8 +179,9 @@ export const useGameStore = create<GameStore>((set, get) => {
           });
         }
         break;
+      }
       case "READY":
-        console.log("[Holdfast] Engine Ready");
+        console.log("[Holdfast] Engine Ready — Multi-Civ Mode");
         break;
       case "ACTION_REJECTED":
         console.warn("[Holdfast] Action Rejected:", event.reason, event.action);
@@ -185,7 +202,9 @@ export const useGameStore = create<GameStore>((set, get) => {
     tiles: [],
     workers: [],
     buildings: [],
-    civilizationId: "franks",
+    playerCivId: "franks",
+    activeCivs: [],
+    civStates: {},
 
     // UI state
     selectedBuilding: null,
@@ -195,113 +214,129 @@ export const useGameStore = create<GameStore>((set, get) => {
     simSpeed: 1,
     isPaused: false,
     autoPlay: false,
+    gameStarted: false,
     camera: {
       zoom: 1.0,
       offsetX: 0,
       offsetY: 0,
     },
 
-    initEngine: (seed: string, civilizationId?: CivilizationId, forceReset = false) => {
-      let initialCivId = civilizationId || get().civilizationId || "franks";
-      const civ = getCivilization(initialCivId);
+    initEngine: (seed: string, playerCivId: CivilizationId) => {
+      const allCivIds: CivilizationId[] = CIVILIZATION_LIST.map(c => c.id);
+      const aiCivIds = allCivIds.filter(id => id !== playerCivId);
+      const activeCivs: CivilizationId[] = [playerCivId, ...aiCivIds];
 
-      let initialTiles = forceReset ? [] : get().tiles;
-      if (initialTiles.length === 0) {
-        initialTiles = generateMap(seed);
-      }
+      // Assign corner spawn positions deterministically
+      const corners = getCornerSpawns();
 
-      let initialWorkers: WorkerState[] = forceReset ? [] : [...get().workers];
-      let initialBuildings: BuildingState[] = forceReset ? [] : [...get().buildings];
-      
-      const civStarter = civ.bonuses.startingResources || {};
-      let initialResources: ResourcePool = forceReset 
-        ? { 
-            food: STARTER_RESOURCES.food + (civStarter.food || 0),
-            wood: STARTER_RESOURCES.wood + (civStarter.wood || 0),
-            stone: STARTER_RESOURCES.stone + (civStarter.stone || 0),
-            knowledge: STARTER_RESOURCES.knowledge + (civStarter.knowledge || 0),
-          } 
-        : { ...get().resources };
+      // Generate map with habitable zones at each corner
+      const tiles = generateMultiStartMap(seed, corners);
 
-      if (initialBuildings.length === 0 && initialWorkers.length === 0) {
-        const centerTileId = CENTER_Y * MAP_WIDTH + CENTER_X;
-        const centerTile = initialTiles[centerTileId];
+      // Create per-civ states and place Town Halls
+      const civStates: Record<string, CivRuntimeState> = {};
+      const buildings: BuildingState[] = [];
+      const workers: WorkerState[] = [];
 
-        if (centerTile && !centerTile.buildingId) {
-          const townHall: BuildingState = {
-            id: `b-0-${centerTileId}`,
-            type: "TOWN_HALL",
-            tileId: centerTileId,
-            tier: 1,
-            constructionTicksRemaining: 0,
-            constructionWorkerId: null,
-            staffed: false,
-            operational: false,
-            assignedWorkerIds: [],
-          };
+      activeCivs.forEach((civId, idx) => {
+        const civ = getCivilization(civId);
+        const spawn = corners[idx];
+        const centerTileId = spawn.y * MAP_WIDTH + spawn.x;
 
-          initialBuildings = [townHall];
-          centerTile.buildingId = townHall.id;
-          centerTile.walkable = false;
-          expandTerritory(initialTiles, centerTileId, 3, 5);
+        // Apply starting resources
+        const civStarter = civ.bonuses.startingResources || {};
+        const civResources: ResourcePool = {
+          food: STARTER_RESOURCES.food + (civStarter.food || 0),
+          wood: STARTER_RESOURCES.wood + (civStarter.wood || 0),
+          stone: STARTER_RESOURCES.stone + (civStarter.stone || 0),
+          knowledge: STARTER_RESOURCES.knowledge + (civStarter.knowledge || 0),
+        };
 
-          initialWorkers = Array.from({ length: 3 }).map((_, i) => ({
-            id: `w-0-${i}`,
+        civStates[civId] = {
+          civilizationId: civId,
+          resources: civResources,
+          era: 1,
+          autoPlay: civId !== playerCivId, // AI civs always autoplay
+          townHallTileId: centerTileId,
+        };
+
+        // Place Town Hall
+        const townHall: BuildingState = {
+          id: `b-${civId}-0-${centerTileId}`,
+          ownerId: civId,
+          type: "TOWN_HALL",
+          tileId: centerTileId,
+          tier: 1,
+          constructionTicksRemaining: 0,
+          constructionWorkerId: null,
+          staffed: false,
+          operational: false,
+          assignedWorkerIds: [],
+        };
+        buildings.push(townHall);
+
+        const tile = tiles[centerTileId];
+        if (tile) {
+          tile.buildingId = townHall.id;
+          tile.walkable = true; // Workers can walk through buildings
+        }
+
+        // Expand territory around town hall
+        expandTerritory(tiles, centerTileId, civId, 3, 5);
+
+        // Spawn 3 initial workers
+        const visionBoost = civ.bonuses.visionRadiusBoost || 0;
+        for (let i = 0; i < 3; i++) {
+          workers.push({
+            id: `w-${civId}-0-${i}`,
+            ownerId: civId,
             unitType: "WORKER",
             state: "IDLE",
             assignedBuildingId: null,
-            position: { x: CENTER_X, y: CENTER_Y },
+            position: { x: spawn.x, y: spawn.y },
             path: [],
             harvestTicks: 0,
             carrying: null,
-            visionRadius: 1 + (civ.bonuses.visionRadiusBoost || 0),
-          }));
-
-          initialResources = {
-            food: Math.max(initialResources.food, STARTER_RESOURCES.food),
-            wood: Math.max(initialResources.wood, STARTER_RESOURCES.wood),
-            stone: Math.max(initialResources.stone, STARTER_RESOURCES.stone),
-            knowledge: Math.max(
-              initialResources.knowledge,
-              STARTER_RESOURCES.knowledge,
-            ),
-          };
+            visionRadius: UNIT_CONFIG.WORKER.visionRadius + visionBoost,
+          });
         }
-      }
+      });
+
+      // Camera: center on player's spawn position
+      const playerSpawn = corners[0]; // Player is always first
+      const playerCivState = civStates[playerCivId];
 
       set({
         mapSeed: seed,
-        tiles: initialTiles,
-        workers: initialWorkers,
-        buildings: initialBuildings,
-        resources: initialResources,
-        civilizationId: initialCivId,
-        tickCount: forceReset ? 0 : get().tickCount,
-        era: forceReset ? 1 : get().era,
+        tiles,
+        workers,
+        buildings,
+        resources: { ...playerCivState.resources },
+        era: 1,
+        playerCivId,
+        activeCivs,
+        civStates,
+        tickCount: 0,
+        gameStarted: true,
+        autoPlay: false,
+        // Center camera on player spawn (map is centered by default, so we just offset by the distance to spawn from center)
+        camera: {
+          zoom: 1.5,
+          // Calculate offset in tile units from the center (MAP_WIDTH / 2), then convert to pixels at current scale
+          offsetX: -((playerSpawn.x - MAP_WIDTH / 2) * 16 * 2 * 1.5),
+          offsetY: -((playerSpawn.y - MAP_WIDTH / 2) * 16 * 2 * 1.5),
+        },
       });
 
-      const {
-        mapSeed,
-        tickCount,
-        era,
-        resources,
-        tiles,
-        workers,
-        buildings,
-        savedAt,
-        civilizationId: finalCivId,
-      } = get();
       const initialState: GameState = {
-        mapSeed,
-        tickCount,
-        era,
-        resources,
+        mapSeed: seed,
+        playerCivId,
+        activeCivs,
+        civStates,
+        tickCount: 0,
         tiles,
         workers,
         buildings,
-        savedAt,
-        civilizationId: finalCivId,
-        autoPlay: get().autoPlay,
+        savedAt: null,
       };
 
       const cmd: WorkerInbound = { type: "INIT", state: initialState };
@@ -358,7 +393,7 @@ export const useGameStore = create<GameStore>((set, get) => {
     },
 
     setSimSpeed: (multiplier: number) => {
-      const allowed = [1, 2, 5, 10, 100];
+      const allowed = [1, 2, 5, 10, 100, 1000];
       const nextSpeed = allowed.includes(multiplier) ? multiplier : 1;
       set({ simSpeed: nextSpeed });
       const cmd: WorkerInbound = { type: "SET_SPEED", multiplier: nextSpeed };
@@ -420,7 +455,7 @@ export const useGameStore = create<GameStore>((set, get) => {
     },
     reRollMap: () => {
       const newSeed = `seed-${Math.random().toString(36).substring(2, 9)}`;
-      get().initEngine(newSeed, undefined, true);
+      get().initEngine(newSeed, get().playerCivId);
     },
     toggleAutoPlay: () => {
       const next = get().autoPlay;

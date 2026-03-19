@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { ResourceBar } from "./ui/ResourceBar";
 import { EraPanel } from "./ui/EraPanel";
 import { HUD } from "./ui/BuildingPalette";
@@ -8,6 +8,7 @@ import { CanvasRenderer } from "./renderer/canvas-renderer";
 import { tileIdToCoord } from "./engine/pathfinder";
 import { BUILDING_CONFIG } from "./engine/building-config";
 import { CivSelector } from "./ui/CivSelector";
+import type { CivilizationId } from "./engine/tick-types";
 
 /** Tile type display names for the tooltip. */
 const TILE_NAMES: Record<string, string> = {
@@ -38,6 +39,8 @@ function App() {
     workers,
     selectedBuilding,
     hoveredTileId,
+    gameStarted,
+    playerCivId,
   } = store;
 
   // Tooltip position tracking
@@ -46,7 +49,16 @@ function App() {
   const [confirmDemolishId, setConfirmDemolishId] = useState<string | null>(
     null,
   );
-  const [showCivSelector, setShowCivSelector] = useState(false);
+
+  // Generate seed once on mount
+  const mapSeed = useMemo(
+    () => `seed-${Math.random().toString(36).substring(2, 9)}`,
+    [],
+  );
+
+  const handleCivSelect = (civId: CivilizationId) => {
+    initEngine(mapSeed, civId);
+  };
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -58,11 +70,6 @@ function App() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
-
-  useEffect(() => {
-    const randomSeed = `seed-${Math.random().toString(36).substring(2, 9)}`;
-    initEngine(randomSeed);
-  }, [initEngine]);
 
   useEffect(() => {
     if (canvasRef.current && !rendererRef.current) {
@@ -155,12 +162,16 @@ function App() {
     setHoveredTile(null);
   };
 
+  // Show ONLY player's buildings in the right panel
+  const playerBuildings = buildings.filter(b => b.ownerId === playerCivId);
+  const playerWorkers = workers.filter(w => w.ownerId === playerCivId);
+
   // Priority for right panel: selected tile > hovered tile
   const activeTileId = selectedTileId !== null ? selectedTileId : hoveredTileId;
   const activeTile = activeTileId !== null ? tiles[activeTileId] : null;
 
   const activeBuilding = activeTile?.buildingId
-    ? buildings.find((b) => b.id === activeTile.buildingId)
+    ? playerBuildings.find((b) => b.id === activeTile.buildingId)
     : null;
   const activeBuildingConfig = activeBuilding
     ? BUILDING_CONFIG[activeBuilding.type]
@@ -175,7 +186,7 @@ function App() {
     ? BUILDING_CONFIG[hoveredBuilding.type]
     : null;
 
-  const idleWorkers = workers.filter(
+  const idleWorkers = playerWorkers.filter(
     (w) => w.assignedBuildingId === null && w.state === "IDLE",
   );
   const assignedWorkerIds = activeBuilding?.assignedWorkerIds ?? [];
@@ -230,8 +241,14 @@ function App() {
     tooltipPos.y > 60 &&
     tooltipPos.y < window.innerHeight - 110;
 
+  // ─── Render components ───
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-black">
+      {!gameStarted && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black">
+          <CivSelector onSelect={handleCivSelect} />
+        </div>
+      )}
       <canvas
         ref={canvasRef}
         id="game-canvas"
@@ -244,12 +261,10 @@ function App() {
         onMouseLeave={handleMouseLeave}
       />
 
-      <ResourceBar onChooseCiv={() => setShowCivSelector(true)} />
+      <ResourceBar />
       <EraPanel />
       <HUD />
       <Minimap />
-
-      {showCivSelector && <CivSelector onClose={() => setShowCivSelector(false)} />}
 
       {/* Action rejection alerts */}
       {actionAlerts.length > 0 && (
@@ -266,7 +281,7 @@ function App() {
         </div>
       )}
 
-      {/* Building actions panel */}
+      {/* Building actions panel — only for player's buildings */}
       {activeBuilding && activeBuildingConfig && (
         <div className="fixed right-0 top-[56px] w-[220px] z-40 bg-[#0f0f0f]/95 border-l border-b border-[#2a2a2a] backdrop-blur-sm p-3 flex flex-col gap-2 pointer-events-auto">
           {/* Header indicating selection status */}
@@ -464,7 +479,12 @@ function App() {
               {TILE_NAMES[hoveredTile.type] || hoveredTile.type}
             </span>
             {hoveredTile.owned && (
-              <span style={{ color: "#4aaf4a", fontSize: "6px" }}>OWNED</span>
+              <span style={{ 
+                color: hoveredTile.ownerId === playerCivId ? "#4aaf4a" : "#c04040", 
+                fontSize: "6px" 
+              }}>
+                {hoveredTile.ownerId === playerCivId ? "YOURS" : "ENEMY"}
+              </span>
             )}
           </div>
 
@@ -486,7 +506,9 @@ function App() {
               </span>
               <div className="flex gap-2">
                 <span style={{ color: "#888870", fontSize: "6px" }}>
-                  {buildingStatus}
+                  {hoveredBuilding.constructionTicksRemaining > 0 
+                    ? `CONSTRUCTING (${hoveredBuilding.constructionTicksRemaining}t)` 
+                    : hoveredBuilding.operational ? "OPERATIONAL" : "IDLE"}
                 </span>
                 <span style={{ color: "#888870", fontSize: "6px" }}>
                   {hoveredBuilding.assignedWorkerIds.length} workers

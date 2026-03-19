@@ -56,8 +56,10 @@ export interface TileState {
   id: number;
   /** Terrain type controlling walkability and resource node rules. */
   type: TileType;
-  /** Whether this tile is claimed by the player's settlement. */
+  /** Whether this tile is claimed by any settlement. */
   owned: boolean;
+  /** The civilization that owns this tile, or null if unclaimed. */
+  ownerId: CivilizationId | null;
   /** Whether workers can traverse this tile (false for Water, tiles with buildings). */
   walkable: boolean;
   /** Whether this tile is within the player's fog-of-war vision radius. */
@@ -84,6 +86,8 @@ export type BuildingType =
 export interface BuildingState {
   /** Unique identifier generated at placement time. */
   id: string;
+  /** The civilization that owns this building. */
+  ownerId: CivilizationId;
   /** The building's functional type. */
   type: BuildingType;
   /** The tile ID where this building is anchored. */
@@ -131,6 +135,8 @@ export interface ResourceUnit {
 export interface UnitState {
   /** Unique identifier generated at spawn time. */
   id: string;
+  /** The civilization that owns this unit. */
+  ownerId: CivilizationId;
   /** Unit type (WORKER, SCOUT). */
   unitType: UnitType;
   /** Current state machine state. */
@@ -153,6 +159,19 @@ export interface UnitState {
 export type WorkerState = UnitState;
 
 /**
+ * Per-civilisation isolated economy and progression state.
+ * Each civ has its own resource pool, era, and autoplay flag.
+ */
+export interface CivRuntimeState {
+  civilizationId: CivilizationId;
+  resources: ResourcePool;
+  era: 1 | 2 | 3 | 4;
+  autoPlay: boolean;
+  /** Tile ID of this civ's Town Hall. Null if not yet placed. */
+  townHallTileId: number | null;
+}
+
+/**
  * The complete client-side game state, serialised on save.
  * This is the shape sent to the server's SnapshotValidator.
  */
@@ -160,23 +179,21 @@ export interface GameState {
   /** Deterministic seed used to regenerate the map on load. */
   mapSeed: string;
   /** The civilization chosen by the player. */
-  civilizationId: CivilizationId;
+  playerCivId: CivilizationId;
+  /** All active civilizations in this game session. */
+  activeCivs: CivilizationId[];
+  /** Per-civilisation isolated state (resources, era, autoPlay). */
+  civStates: Record<string, CivRuntimeState>;
   /** Total ticks elapsed — the simulation's sole time axis. */
   tickCount: number;
-  /** Current era (1=Founding, 2=Settlement, 3=Fortification). */
-  era: 1 | 2 | 3 | 4;
-  /** Current resource totals, clamped to storage capacity. */
-  resources: ResourcePool;
   /** Full tile grid state (80×80 = 6400 entries). */
   tiles: TileState[];
-  /** All active unit agents. */
+  /** All active unit agents (across all civs). */
   workers: UnitState[];
-  /** All placed buildings. */
+  /** All placed buildings (across all civs). */
   buildings: BuildingState[];
   /** ISO timestamp of the last successful save, or null. */
   savedAt: string | null;
-  /** Whether the simulation is in autonomous mode. */
-  autoPlay: boolean;
 }
 
 /**
@@ -199,7 +216,11 @@ export type PlayerAction =
 export interface TickResult {
   type: "TICK_RESULT";
   tickCount: number;
-  resourceTotals: ResourcePool;
+  /** Per-civilisation state snapshots for UI. */
+  civStates: Record<string, CivRuntimeState>;
+  /** The player's civilization ID for UI filtering. */
+  playerCivId: CivilizationId;
+  /** Resource delta for the player's civ this tick. */
   resourceDelta: ResourcePool;
   workerPositions: { id: string; tileId: number; state: WorkerAgentState }[];
   buildingUpdates: { id: string; staffed: boolean; operational: boolean }[];

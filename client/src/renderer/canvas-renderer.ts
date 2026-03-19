@@ -6,10 +6,12 @@ import type {
   ResourcePool,
   TileType,
   BuildingType,
+  CivilizationId,
 } from "../state/types";
 import { tileIdToCoord } from "../engine/pathfinder";
 import { MAP_WIDTH } from "../engine/map-generator";
 import { BUILDING_CONFIG } from "../engine/building-config";
+import { CIVILIZATION_LIST } from "../engine/civilizations";
 
 /** Logical tile size before scaling. */
 const TILE_SIZE = 16;
@@ -102,14 +104,31 @@ const UNIT_COLORS: Record<string, string> = {
   SCOUT: "#4040ff",
 };
 
-
 /** Background/fog colour. */
 const BG_COLOR = "#0a0a0a";
+
+/** Build a lookup map from civId → hex colour for fast rendering. */
+const CIV_COLOR_MAP: Record<string, string> = {};
+for (const civ of CIVILIZATION_LIST) {
+  CIV_COLOR_MAP[civ.id] = civ.color;
+}
+
+/**
+ * Convert a hex colour string to an rgba string with alpha.
+ */
+function hexToRgba(hex: string, alpha: number): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
 
 /**
  * Canvas 2D renderer for the HoldFast game map.
  * Handles tile grid, fog-of-war, buildings, workers, owned territory,
  * and selection highlights. Crisp pixel-art via imageSmoothingEnabled=false.
+ * 
+ * Multi-civ: territory, buildings, and workers are colour-coded by ownerId.
  */
 export class CanvasRenderer {
   private ctx: CanvasRenderingContext2D;
@@ -127,6 +146,7 @@ export class CanvasRenderer {
   private camera: CameraState = { zoom: 1, offsetX: 0, offsetY: 0 };
   private selectedBuilding: string | null = null;
   private hoveredTileId: number | null = null;
+  private playerCivId: CivilizationId = "franks";
   private animFrame: number = 0;
 
   // Computed values
@@ -156,12 +176,13 @@ export class CanvasRenderer {
   public updateState(store: GameStore, camera: CameraState) {
     this.tiles = store.tiles;
     this.buildings = store.buildings;
-    this.units = store.workers; // Still mapped from store.workers for now
+    this.units = store.workers;
     this.era = store.era;
     this.resources = store.resources;
     this.camera = camera;
     this.selectedBuilding = store.selectedBuilding;
     this.hoveredTileId = store.hoveredTileId;
+    this.playerCivId = store.playerCivId;
     this.currentTileSize = TILE_SIZE * BASE_SCALE * camera.zoom;
   }
 
@@ -217,7 +238,14 @@ export class CanvasRenderer {
   ): boolean {
     if (!buildingType) return false;
     const tile = this.tiles[tileId];
-    if (!tile || !tile.owned || !tile.walkable || tile.buildingId) {
+    if (!tile || !tile.walkable || tile.buildingId) {
+      return false;
+    }
+    // Must be owned by player or unowned
+    if (tile.owned && tile.ownerId !== this.playerCivId) {
+      return false;
+    }
+    if (!tile.owned) {
       return false;
     }
 
@@ -228,7 +256,7 @@ export class CanvasRenderer {
 
     if (
       buildingType === "TOWN_HALL" &&
-      this.buildings.some((b) => b.type === "TOWN_HALL")
+      this.buildings.some((b) => b.type === "TOWN_HALL" && b.ownerId === this.playerCivId)
     ) {
       return false;
     }
@@ -301,9 +329,10 @@ export class CanvasRenderer {
       ctx.fillStyle = colors.base;
       ctx.fillRect(px, py, this.currentTileSize, this.currentTileSize);
 
-      // Owned territory tint — white overlay at 10% opacity
-      if (tile.owned) {
-        ctx.fillStyle = "rgba(255, 255, 255, 0.1)";
+      // Owned territory tint — civ-coloured overlay at 12% opacity
+      if (tile.owned && tile.ownerId) {
+        const civColor = CIV_COLOR_MAP[tile.ownerId] || "#ffffff";
+        ctx.fillStyle = hexToRgba(civColor, 0.12);
         ctx.fillRect(px, py, this.currentTileSize, this.currentTileSize);
       }
 
@@ -331,6 +360,11 @@ export class CanvasRenderer {
         continue;
       }
 
+      // Check if tile is visible
+      const tileId = coord.y * MAP_WIDTH + coord.x;
+      const tile = this.tiles[tileId];
+      if (tile && !tile.visible) continue;
+
       const bColors = BUILDING_COLORS[building.type] || {
         fill: "#888888",
         border: "#666666",
@@ -351,9 +385,10 @@ export class CanvasRenderer {
         this.currentTileSize - inset * 2,
       );
 
-      // Building border
-      ctx.strokeStyle = bColors.border;
-      ctx.lineWidth = 1;
+      // Building border — coloured by owning civ
+      const civBorderColor = CIV_COLOR_MAP[building.ownerId] || bColors.border;
+      ctx.strokeStyle = civBorderColor;
+      ctx.lineWidth = building.ownerId === this.playerCivId ? 1 : 2;
       ctx.strokeRect(
         px + inset,
         py + inset,
@@ -392,19 +427,27 @@ export class CanvasRenderer {
         continue;
       }
 
+      // Check if tile is visible
+      const tileId = unit.position.y * MAP_WIDTH + unit.position.x;
+      const tile = this.tiles[tileId];
+      if (tile && !tile.visible) continue;
+
       const unitSize = Math.max(2, this.currentTileSize * 0.35);
       const offset = (this.currentTileSize - unitSize) / 2;
 
-      // Unit body — colour primarily by type, unless starving or special state
+      // Unit body — colour by owning civ, with state-based modifiers
       if (unit.state === "STARVING") {
         ctx.fillStyle = WORKER_STATE_COLORS.STARVING;
-      } else {
+      } else if (unit.ownerId === this.playerCivId) {
         ctx.fillStyle = UNIT_COLORS[unit.unitType] || "#ffffff";
+      } else {
+        // AI units: use their civ colour
+        ctx.fillStyle = CIV_COLOR_MAP[unit.ownerId] || "#ff8800";
       }
       ctx.fillRect(px + offset, py + offset, unitSize, unitSize);
 
-      // Unit outline
-      ctx.strokeStyle = "#000000";
+      // Unit outline — thicker for AI units
+      ctx.strokeStyle = unit.ownerId === this.playerCivId ? "#000000" : "#ffffff";
       ctx.lineWidth = 1;
       ctx.strokeRect(px + offset, py + offset, unitSize, unitSize);
 

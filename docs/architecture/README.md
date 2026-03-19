@@ -37,12 +37,13 @@ To ensure optimal performance, the entire game state matrix is computed client-s
 ```typescript
 {
   mapSeed: string;            // Deterministic topological key to recreate map upon rendering.
+  playerCivId: string;        // The civilization chosen by the client player.
+  activeCivs: string[];       // Array of all civilizations instantiated on this map.
+  civStates: Record<string, CivRuntimeState>; // Per-civilisation isolated state (resources, era, autoPlay flag).
   tickCount: number;          // Total absolute temporal cycles elapsed.
-  era: 1 | 2 | 3;
-  resources: ResourcePool;    // { food, wood, stone, knowledge }.
-  tiles: TileState[];         // Coordinates and occupancy identifiers.
-  workers: WorkerState[];     // Agent positions, assignments, and task states.
-  buildings: BuildingState[]; // Building metadata + construction state.
+  tiles: TileState[];         // Coordinates and occupancy identifiers, tinted by ownerId.
+  workers: UnitState[];       // Agent positions, assignments, and task states per ownerId.
+  buildings: BuildingState[]; // Building metadata + construction state per ownerId.
   savedAt: string | null;     // ISO 8601 UTC timestamp (server-stamped on save).
 }
 ```

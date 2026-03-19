@@ -1,48 +1,29 @@
-
-import { useGameStore } from "../state/game-store";
 import { CIVILIZATION_LIST } from "../engine/civilizations";
 import type { CivilizationId } from "../engine/tick-types";
 
-export function CivSelector({ onClose }: { onClose: () => void }) {
-  const currentCivId = useGameStore((s) => s.civilizationId);
-  const initEngine = useGameStore((s) => s.initEngine);
-  const mapSeed = useGameStore((s) => s.mapSeed);
-
-  const handleSelect = (id: CivilizationId) => {
-    initEngine(mapSeed, id, true);
-    onClose();
-  };
-
+/**
+ * Civilization selection overlay — shown at startup.
+ * Cannot be dismissed without selecting a civ. Selecting starts the game.
+ */
+export function CivSelector({ onSelect }: { onSelect: (id: CivilizationId) => void }) {
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-md">
-      <div className="w-[500px] bg-[#0f0f0f] border border-[#ffffff10] rounded-2xl p-8 shadow-2xl flex flex-col gap-6">
-        <div className="flex justify-between items-center border-b border-[#ffffff10] pb-4">
-          <h2 className="text-xl font-bold tracking-tighter text-[#e8e8d0]">SELECT CIVILIZATION</h2>
-          <button 
-            onClick={onClose}
-            className="text-[#888870] hover:text-[#e8e8d0] transition-colors"
-          >
-            ✕
-          </button>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md">
+      <div className="w-[520px] bg-[#0f0f0f] border border-[#ffffff10] rounded-2xl p-8 shadow-2xl flex flex-col gap-6">
+        <div className="border-b border-[#ffffff10] pb-4">
+          <h2 className="text-xl font-bold tracking-tighter text-[#e8e8d0]">CHOOSE YOUR CIVILIZATION</h2>
+          <p className="text-[10px] text-[#888870] mt-1">Each civilization brings unique bonuses. Choose wisely — this cannot be changed.</p>
         </div>
 
         <div className="grid grid-cols-1 gap-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
           {CIVILIZATION_LIST.map((civ) => (
             <button
               key={civ.id}
-              onClick={() => handleSelect(civ.id)}
-              className={`group flex flex-col gap-2 p-4 border rounded-xl transition-all text-left ${
-                currentCivId === civ.id
-                  ? "border-current bg-current/10"
-                  : "border-[#ffffff08] bg-[#ffffff03] hover:border-[#ffffff20] hover:bg-[#ffffff08]"
-              }`}
+              onClick={() => onSelect(civ.id)}
+              className="group flex flex-col gap-2 p-4 border rounded-xl transition-all text-left border-[#ffffff08] bg-[#ffffff03] hover:border-[#ffffff20] hover:bg-[#ffffff08]"
               style={{ color: civ.color }}
             >
               <div className="flex justify-between items-center">
                 <span className="font-bold text-lg tracking-tight">{civ.name}</span>
-                {currentCivId === civ.id && (
-                  <span className="text-[10px] bg-current/20 px-2 py-1 rounded uppercase tracking-widest font-bold">ACTIVE</span>
-                )}
               </div>
               <p className="text-[#888870] text-xs leading-relaxed group-hover:text-[#a0a090] transition-colors">
                 {civ.description}

@@ -51,10 +51,14 @@ const WORKER_STATE_COLORS: Record<string, string> = {
 export function EraPanel() {
   const era = useGameStore((s) => s.era);
   const resources = useGameStore((s) => s.resources);
-  const workers = useGameStore((s) => s.workers);
+  const allWorkers = useGameStore((s) => s.workers);
+  const playerCivId = useGameStore((s) => s.playerCivId);
   const researchEra = useGameStore((s) => s.researchEra);
   const spawnWorker = useGameStore((s) => s.spawnWorker);
-  const hasTownHall = useGameStore((s) => s.buildings.some((b) => b.type === "TOWN_HALL"));
+  const hasTownHall = useGameStore((s) => s.buildings.some((b) => b.type === "TOWN_HALL" && b.ownerId === s.playerCivId));
+
+  // Scope workers to the player's civilization
+  const workers = allWorkers.filter(w => w.ownerId === playerCivId);
 
   const info = ERA_INFO[era as 1 | 2 | 3 | 4];
   const isMaxEra = era === 4;

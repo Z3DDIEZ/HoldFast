@@ -25,6 +25,7 @@ The architecture of Holdfast rigorously enforces a clear boundary of trust. The 
 - **Survival Engine Recovery**: Overhauled survival logic with a 75% speed penalty during famine instead of a total freeze.
 - **Construction & Stability**: Implemented construction worker caps (25% population) and building walkability to prevent worker-trapping deadlocks and infinite growth loops.
 - **Resource Balancing**: Resolved "Wood Crisis" via prioritized weighting and circular costing fixes (Lumber Mill costs Stone, Quarry costs Wood).
+- **Multi-Civilization Matrix**: Supports concurrent simulation of 4 distinct civilizations on a shared 80x80 map. Features asynchronous starting resources, isolated production yields, distinct terrain paint claiming (First-Owner-Wins rule), and strict startup-gated UI selection (`CivSelector`).
 
 ## Local Development
 
