@@ -393,7 +393,7 @@ export const useGameStore = create<GameStore>((set, get) => {
     },
 
     setSimSpeed: (multiplier: number) => {
-      const allowed = [1, 2, 5, 10, 100, 1000];
+      const allowed = [1, 2, 5, 10, 100, 1000, 10000];
       const nextSpeed = allowed.includes(multiplier) ? multiplier : 1;
       set({ simSpeed: nextSpeed });
       const cmd: WorkerInbound = { type: "SET_SPEED", multiplier: nextSpeed };

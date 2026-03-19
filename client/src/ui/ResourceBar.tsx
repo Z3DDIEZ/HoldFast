@@ -120,7 +120,7 @@ export function ResourceBar() {
   const workers = useGameStore((s) => s.workers);
 
   const civ = getCivilization(playerCivId);
-  const speedOptions = [1, 2, 5, 10, 100, 1000];
+  const speedOptions = [1, 2, 5, 10, 100, 1000, 10000];
   const playerWorkerCount = workers.filter(w => w.ownerId === playerCivId).length;
 
   return (

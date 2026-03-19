@@ -50,6 +50,7 @@ let actionQueue: PlayerAction[] = [];
 let paused = false;
 let tickTimeoutId: ReturnType<typeof setTimeout> | null = null;
 let tickMs = BASE_TICK_MS;
+let ticksPerLoop = 1;
 let eraChangedThisTick = false;
 
 // ─── Scoped query helpers ─────────────────────────────────────────────
@@ -1398,15 +1399,31 @@ function runAutoPlay(civId: CivilizationId) {
 function scheduleTick() {
   if (paused) return;
   tickTimeoutId = setTimeout(() => {
-    runTick();
+    // Run the logic multiple times instantly before scheduling the next frame
+    // This allows speeds well beyond 100x
+    for (let i = 0; i < ticksPerLoop; i++) {
+        runTick();
+    }
     scheduleTick();
   }, tickMs);
 }
 
 function setSpeed(multiplier: number) {
   if (!Number.isFinite(multiplier) || multiplier <= 0) return;
-  const clamped = Math.max(1, Math.min(100, multiplier));
-  tickMs = Math.max(MIN_TICK_MS, Math.floor(BASE_TICK_MS / clamped));
+  
+  // Calculate how fast the interval should ideally be
+  const idealTickMs = BASE_TICK_MS / multiplier;
+  
+  if (idealTickMs < MIN_TICK_MS) {
+    // We can't fire timeouts faster than MIN_TICK_MS limits
+    // So we fire every MIN_TICK_MS and run multiple logic ticks at once to make up for it
+    tickMs = MIN_TICK_MS;
+    ticksPerLoop = Math.ceil(MIN_TICK_MS / idealTickMs);
+  } else {
+    tickMs = Math.floor(idealTickMs);
+    ticksPerLoop = 1;
+  }
+  
   if (!paused) {
     if (tickTimeoutId) clearTimeout(tickTimeoutId);
     scheduleTick();
@@ -1422,6 +1439,7 @@ export const __test__ = {
     paused = false;
     tickTimeoutId = null;
     tickMs = BASE_TICK_MS;
+    ticksPerLoop = 1;
     eraChangedThisTick = false;
   },
   getState() {
