@@ -13,8 +13,10 @@ import type {
   UnitState,
   TileState,
   WorkerState,
+  Civilization,
 } from "./tick-types";
 import { BUILDING_CONFIG, UNIT_CONFIG } from "./building-config";
+import { getCivilization } from "./civilizations";
 import { findPath, tileIdToCoord } from "./pathfinder";
 import { expandTerritory, MAP_WIDTH } from "./map-generator";
 
@@ -43,6 +45,7 @@ const ERA_BUILDING_GOALS: Record<number, Partial<Record<BuildingType, number>>> 
 
 
 let state: GameState | null = null;
+let civilization: Civilization | null = null;
 let actionQueue: PlayerAction[] = [];
 let paused = false;
 let tickTimeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -51,7 +54,8 @@ let eraChangedThisTick = false;
 
 /** Update visibility for all tiles within a unit's vision radius. */
 function updateVision(unit: UnitState, tiles: TileState[]) {
-  const radius = unit.visionRadius;
+  const visionBoost = civilization?.bonuses.visionRadiusBoost || 0;
+  const radius = unit.visionRadius + visionBoost;
   const cx = unit.position.x;
   const cy = unit.position.y;
 
@@ -302,7 +306,8 @@ function runTick() {
     b.operational = isConstructed && b.staffed;
 
     if (b.operational && config.resource) {
-      productionDelta[config.resource] += config.yieldAmount;
+      const yieldBoost = civilization?.bonuses.yieldMultiplier?.[config.resource] || 1;
+      productionDelta[config.resource] += config.yieldAmount * yieldBoost;
     }
     buildingUpdates.push({
       id: b.id,
@@ -353,9 +358,11 @@ function runTick() {
     "knowledge",
   ];
   for (const key of resourceKeys) {
-    state.resources[key] = Math.min(
-      Math.max(0, state.resources[key] + combinedDelta[key]),
-      capacity,
+    state.resources[key] = Math.round(
+      Math.min(
+        Math.max(0, state.resources[key] + combinedDelta[key]),
+        capacity,
+      )
     );
   }
 
@@ -457,14 +464,17 @@ function validateAndApplyAction(action: PlayerAction): string | null {
 
       // Check costs
       const cost = config.cost;
+      const costMultiplier = civilization?.bonuses.costMultiplier || {};
       for (const r of Object.keys(cost) as (keyof ResourcePool)[]) {
-        if (state.resources[r] < (cost[r] || 0))
+        const actualCost = (cost[r] || 0) * (costMultiplier[r] || 1);
+        if (state.resources[r] < actualCost)
           return "INSUFFICIENT_RESOURCES";
       }
 
       // Deduct costs
       for (const r of Object.keys(cost) as (keyof ResourcePool)[]) {
-        state.resources[r] -= cost[r] || 0;
+        const actualCost = (cost[r] || 0) * (costMultiplier[r] || 1);
+        state.resources[r] -= actualCost;
       }
 
       const building: BuildingState = {
@@ -664,8 +674,10 @@ function validateAndApplyAction(action: PlayerAction): string | null {
       if (!unitConfig) return "UNKNOWN_UNIT_TYPE";
 
       // Check costs
+      const spawnCostMultiplier = civilization?.bonuses.costMultiplier || {};
       for (const r of Object.keys(unitConfig.cost) as (keyof ResourcePool)[]) {
-        if (state.resources[r] < (unitConfig.cost[r] || 0))
+        const actualCost = (unitConfig.cost[r] || 0) * (spawnCostMultiplier[r] || 1);
+        if (state.resources[r] < actualCost)
           return "INSUFFICIENT_RESOURCES";
       }
 
@@ -674,7 +686,8 @@ function validateAndApplyAction(action: PlayerAction): string | null {
 
       // Deduct costs
       for (const r of Object.keys(unitConfig.cost) as (keyof ResourcePool)[]) {
-        state.resources[r] -= unitConfig.cost[r] || 0;
+        const actualCost = (unitConfig.cost[r] || 0) * (spawnCostMultiplier[r] || 1);
+        state.resources[r] -= actualCost;
       }
 
       const coord = tileIdToCoord(b.tileId);
@@ -778,9 +791,10 @@ function processWorkerStateMachine(
         return;
       }
       if (b.constructionTicksRemaining > 0) {
+        const speedMultiplier = civilization?.bonuses.constructionSpeedMultiplier || 1;
         b.constructionTicksRemaining = Math.max(
           0,
-          b.constructionTicksRemaining - 1,
+          b.constructionTicksRemaining - 1 * speedMultiplier,
         );
       }
       if (b.constructionTicksRemaining === 0) {
@@ -1399,7 +1413,10 @@ if (typeof self !== "undefined" && "addEventListener" in self) {
     const msg = e.data;
     switch (msg.type) {
       case "INIT":
+        if (tickTimeoutId) clearTimeout(tickTimeoutId);
         state = msg.state;
+        civilization = getCivilization(state.civilizationId);
+        actionQueue = [];
         // Ensure all initial tiles have IDs
         state.tiles.forEach((t, i) => (t.id = i));
         emit({ type: "READY" });

@@ -3,6 +3,22 @@
 /** The four resource types in the game economy. */
 export type ResourceType = "food" | "wood" | "stone" | "knowledge";
 
+export type CivilizationId = "franks" | "malians" | "byzantines" | "normans";
+
+export interface Civilization {
+  id: CivilizationId;
+  name: string;
+  description: string;
+  color: string;
+  bonuses: {
+    yieldMultiplier?: Partial<Record<ResourceType, number>>;
+    constructionSpeedMultiplier?: number;
+    visionRadiusBoost?: number;
+    costMultiplier?: Partial<Record<ResourceType, number>>;
+    startingResources?: Partial<ResourcePool>;
+  };
+}
+
 /** All unit types defined in the game. */
 export type UnitType = "WORKER" | "SCOUT";
 
@@ -143,6 +159,8 @@ export type WorkerState = UnitState;
 export interface GameState {
   /** Deterministic seed used to regenerate the map on load. */
   mapSeed: string;
+  /** The civilization chosen by the player. */
+  civilizationId: CivilizationId;
   /** Total ticks elapsed — the simulation's sole time axis. */
   tickCount: number;
   /** Current era (1=Founding, 2=Settlement, 3=Fortification). */

@@ -7,6 +7,7 @@ import { useGameStore } from "./state/game-store";
 import { CanvasRenderer } from "./renderer/canvas-renderer";
 import { tileIdToCoord } from "./engine/pathfinder";
 import { BUILDING_CONFIG } from "./engine/building-config";
+import { CivSelector } from "./ui/CivSelector";
 
 /** Tile type display names for the tooltip. */
 const TILE_NAMES: Record<string, string> = {
@@ -45,6 +46,7 @@ function App() {
   const [confirmDemolishId, setConfirmDemolishId] = useState<string | null>(
     null,
   );
+  const [showCivSelector, setShowCivSelector] = useState(false);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -242,10 +244,12 @@ function App() {
         onMouseLeave={handleMouseLeave}
       />
 
-      <ResourceBar />
+      <ResourceBar onChooseCiv={() => setShowCivSelector(true)} />
       <EraPanel />
       <HUD />
       <Minimap />
+
+      {showCivSelector && <CivSelector onClose={() => setShowCivSelector(false)} />}
 
       {/* Action rejection alerts */}
       {actionAlerts.length > 0 && (

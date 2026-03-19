@@ -1,5 +1,7 @@
 import { useGameStore } from "../state/game-store";
 import { SaveStatusIndicator } from "./SaveStatusIndicator";
+import { getCivilization } from "../engine/civilizations";
+import React from "react";
 
 /** Pixel-art style resource icons matching the HUD accent colours. */
 const Icons = {
@@ -57,7 +59,7 @@ function DeltaIndicator({ value }: { value: number }) {
         fontSize: "7px",
       }}
     >
-      {isPositive ? `+${value}` : `${value}`}
+      {isPositive ? `+${Math.round(value)}` : `${Math.round(value)}`}
     </span>
   );
 }
@@ -87,7 +89,7 @@ function ResourceItem({
       <div className="flex flex-col">
         <div className="flex items-center gap-1">
           <span style={{ color, fontSize: "10px", fontWeight: "bold" }}>
-            {value}
+            {Math.round(value)}
           </span>
           <DeltaIndicator value={delta} />
         </div>
@@ -101,7 +103,7 @@ function ResourceItem({
  * Top-bar HUD displaying resource totals, per-tick deltas,
  * tick counter, and save status.
  */
-export function ResourceBar() {
+export function ResourceBar({ onChooseCiv }: { onChooseCiv: () => void }) {
   const resources = useGameStore((s) => s.resources);
   const resourceDelta = useGameStore((s) => s.resourceDelta);
   const saveStatus = useGameStore((s) => s.saveStatus);
@@ -113,6 +115,10 @@ export function ResourceBar() {
   const togglePause = useGameStore((s) => s.togglePause);
   const autoPlay = useGameStore((s) => s.autoPlay);
   const toggleAutoPlay = useGameStore((s) => s.toggleAutoPlay);
+  const civilizationId = useGameStore((s) => s.civilizationId);
+  const reRollMap = useGameStore((s) => s.reRollMap);
+
+  const civ = getCivilization(civilizationId);
   const speedOptions = [1, 2, 5, 10, 100];
 
   return (
@@ -121,8 +127,8 @@ export function ResourceBar() {
       <div className="flex flex-col border-r border-[#ffffff10] pr-6">
         <div className="flex items-center gap-2">
           <span
-            className="font-bold tracking-widest text-[#e8e8d0]"
-            style={{ fontSize: "11px" }}
+            className="font-bold tracking-widest"
+            style={{ fontSize: "11px", color: civ.color }}
           >
             HOLDFAST
           </span>
@@ -140,9 +146,17 @@ export function ResourceBar() {
           <button
             className="px-2 py-[2px] bg-[#ffffff08] hover:bg-[#ffffff15] border border-[#ffffff10] rounded transition-all text-[#e8e8d0] font-medium"
             style={{ fontSize: "7px" }}
-            onClick={() => useGameStore.getState().reRollMap()}
+            onClick={() => reRollMap()}
           >
             RE-ROLL SEED
+          </button>
+
+          <button
+            className="px-2 py-[2px] bg-[#ffffff08] hover:bg-[#ffffff15] border border-[#ffffff10] rounded transition-all font-medium"
+            style={{ fontSize: "7px", color: civ.color }}
+            onClick={onChooseCiv}
+          >
+            CIV: {civ.name.toUpperCase()}
           </button>
         </div>
       </div>

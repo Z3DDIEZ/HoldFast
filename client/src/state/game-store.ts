@@ -6,8 +6,10 @@ import type {
   BuildingState,
   UnitState as WorkerState,
   UnitType,
+  CivilizationId,
 } from "../engine/tick-types";
 import type { WorkerInbound, WorkerOutbound } from "../engine/tick-types";
+import { getCivilization } from "../engine/civilizations";
 import {
   generateMap,
   CENTER_X,
@@ -89,9 +91,11 @@ export interface GameStore extends GameState {
   isPaused: boolean;
   /** Whether Auto-Play is enabled. */
   autoPlay: boolean;
+  /** The civilization chosen by the player. */
+  civilizationId: CivilizationId;
 
   // Actions
-  initEngine: (seed: string, forceReset?: boolean) => void;
+  initEngine: (seed: string, civilizationId?: CivilizationId, forceReset?: boolean) => void;
   pauseEngine: () => void;
   resumeEngine: () => void;
   togglePause: () => void;
@@ -181,6 +185,7 @@ export const useGameStore = create<GameStore>((set, get) => {
     tiles: [],
     workers: [],
     buildings: [],
+    civilizationId: "franks",
 
     // UI state
     selectedBuilding: null,
@@ -196,7 +201,10 @@ export const useGameStore = create<GameStore>((set, get) => {
       offsetY: 0,
     },
 
-    initEngine: (seed: string, forceReset = false) => {
+    initEngine: (seed: string, civilizationId?: CivilizationId, forceReset = false) => {
+      let initialCivId = civilizationId || get().civilizationId || "franks";
+      const civ = getCivilization(initialCivId);
+
       let initialTiles = forceReset ? [] : get().tiles;
       if (initialTiles.length === 0) {
         initialTiles = generateMap(seed);
@@ -204,7 +212,16 @@ export const useGameStore = create<GameStore>((set, get) => {
 
       let initialWorkers: WorkerState[] = forceReset ? [] : [...get().workers];
       let initialBuildings: BuildingState[] = forceReset ? [] : [...get().buildings];
-      let initialResources: ResourcePool = forceReset ? { ...STARTER_RESOURCES } : { ...get().resources };
+      
+      const civStarter = civ.bonuses.startingResources || {};
+      let initialResources: ResourcePool = forceReset 
+        ? { 
+            food: STARTER_RESOURCES.food + (civStarter.food || 0),
+            wood: STARTER_RESOURCES.wood + (civStarter.wood || 0),
+            stone: STARTER_RESOURCES.stone + (civStarter.stone || 0),
+            knowledge: STARTER_RESOURCES.knowledge + (civStarter.knowledge || 0),
+          } 
+        : { ...get().resources };
 
       if (initialBuildings.length === 0 && initialWorkers.length === 0) {
         const centerTileId = CENTER_Y * MAP_WIDTH + CENTER_X;
@@ -237,7 +254,7 @@ export const useGameStore = create<GameStore>((set, get) => {
             path: [],
             harvestTicks: 0,
             carrying: null,
-            visionRadius: 1,
+            visionRadius: 1 + (civ.bonuses.visionRadiusBoost || 0),
           }));
 
           initialResources = {
@@ -258,6 +275,7 @@ export const useGameStore = create<GameStore>((set, get) => {
         workers: initialWorkers,
         buildings: initialBuildings,
         resources: initialResources,
+        civilizationId: initialCivId,
         tickCount: forceReset ? 0 : get().tickCount,
         era: forceReset ? 1 : get().era,
       });
@@ -271,6 +289,7 @@ export const useGameStore = create<GameStore>((set, get) => {
         workers,
         buildings,
         savedAt,
+        civilizationId: finalCivId,
       } = get();
       const initialState: GameState = {
         mapSeed,
@@ -281,6 +300,7 @@ export const useGameStore = create<GameStore>((set, get) => {
         workers,
         buildings,
         savedAt,
+        civilizationId: finalCivId,
         autoPlay: get().autoPlay,
       };
 
@@ -400,7 +420,7 @@ export const useGameStore = create<GameStore>((set, get) => {
     },
     reRollMap: () => {
       const newSeed = `seed-${Math.random().toString(36).substring(2, 9)}`;
-      get().initEngine(newSeed, true);
+      get().initEngine(newSeed, undefined, true);
     },
     toggleAutoPlay: () => {
       const next = get().autoPlay;
