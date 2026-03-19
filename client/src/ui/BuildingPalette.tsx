@@ -173,7 +173,7 @@ function UnitProductionPanel() {
   if (!config || !config.produces || config.produces.length === 0) return null;
 
   return (
-    <div className="fixed bottom-[110px] right-3 flex flex-col gap-2 p-1 bg-[#0f0f0f]/80 border border-[#ffffff10] backdrop-blur-[12px] rounded-xl shadow-2xl z-50 animate-in fade-in slide-in-from-bottom-2 duration-300">
+    <div className="fixed bottom-[110px] right-[188px] flex flex-col gap-2 p-1 bg-[#0f0f0f]/80 border border-[#ffffff10] backdrop-blur-[12px] rounded-xl shadow-2xl z-50 animate-in fade-in slide-in-from-bottom-2 duration-300">
       <div className="px-3 py-1 border-b border-[#ffffff10] mb-1">
         <span className="text-[10px] text-[#e8e8d0] uppercase tracking-widest font-bold">Production</span>
       </div>

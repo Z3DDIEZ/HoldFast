@@ -109,6 +109,8 @@ export interface GameStore extends GameState {
   selectPlacedBuilding: (buildingId: string | null) => void;
   reRollMap: () => void;
   toggleAutoPlay: () => void;
+  zoomIn: () => void;
+  zoomOut: () => void;
 }
 
 const worker = new Worker(
@@ -404,6 +406,16 @@ export const useGameStore = create<GameStore>((set, get) => {
       const next = get().autoPlay;
       set({ autoPlay: !next });
       worker.postMessage({ type: "TOGGLE_AUTO_PLAY", enabled: !next });
+    },
+    zoomIn: () => {
+      const current = get().camera.zoom;
+      const next = Math.min(5.0, current * 1.2);
+      get().updateCamera({ zoom: next });
+    },
+    zoomOut: () => {
+      const current = get().camera.zoom;
+      const next = Math.max(0.1, current / 1.2);
+      get().updateCamera({ zoom: next });
     },
   };
 });

@@ -152,8 +152,11 @@ export function Minimap() {
     );
   }, [tiles, buildings, camera]);
 
+  const zoomIn = useGameStore((s) => s.zoomIn);
+  const zoomOut = useGameStore((s) => s.zoomOut);
+
   return (
-    <div className="fixed bottom-[110px] right-3 w-[164px] h-[164px] rounded-xl border border-[#ffffff10] bg-[#0f0f0f]/80 backdrop-blur-[12px] shadow-2xl z-40 flex items-center justify-center p-0 overflow-hidden select-none">
+    <div className="fixed bottom-[110px] right-3 w-[164px] h-[164px] rounded-xl border border-[#ffffff10] bg-[#0f0f0f]/80 backdrop-blur-[12px] shadow-2xl z-40 flex items-center justify-center p-0 overflow-hidden select-none group">
       <canvas
         ref={canvasRef}
         width={MAP_DIM * TILE_SIZE}
@@ -162,8 +165,28 @@ export function Minimap() {
         style={{ imageRendering: "pixelated" }}
         onClick={handleMinimapClick}
       />
+      
+      {/* Radar Label */}
       <div className="absolute top-1 left-2 pointer-events-none">
         <span className="text-[#888870] font-bold tracking-tighter" style={{ fontSize: "7px" }}>RADAR</span>
+      </div>
+
+      {/* Zoom Controls */}
+      <div className="absolute top-1 right-1 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button 
+          onClick={(e) => { e.stopPropagation(); zoomIn(); }}
+          className="w-5 h-5 flex items-center justify-center rounded bg-[#ffffff08] border border-[#ffffff10] text-[#e8e8d0] hover:bg-[#ffffff15] hover:border-[#ffffff20] transition-all cursor-pointer active:scale-90"
+          title="Zoom In"
+        >
+          <span style={{ fontSize: "12px", fontWeight: "bold", marginTop: "-1px" }}>+</span>
+        </button>
+        <button 
+          onClick={(e) => { e.stopPropagation(); zoomOut(); }}
+          className="w-5 h-5 flex items-center justify-center rounded bg-[#ffffff08] border border-[#ffffff10] text-[#e8e8d0] hover:bg-[#ffffff15] hover:border-[#ffffff20] transition-all cursor-pointer active:scale-90"
+          title="Zoom Out"
+        >
+          <span style={{ fontSize: "14px", fontWeight: "bold", marginTop: "-2px" }}>-</span>
+        </button>
       </div>
     </div>
   );
