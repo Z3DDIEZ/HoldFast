@@ -1,6 +1,32 @@
 @Holdfast.Api_HostAddress = http://localhost:5214
+@UserId = local
 
-GET {{Holdfast.Api_HostAddress}}/weatherforecast/
+GET {{Holdfast.Api_HostAddress}}/api/saves/{{UserId}}/latest
 Accept: application/json
 
 ###
+
+POST {{Holdfast.Api_HostAddress}}/api/saves
+Content-Type: application/json
+X-User-Id: {{UserId}}
+
+# NOTE: Provide a full snapshot (tiles/workers/buildings). Placeholder body below.
+{
+  "mapSeed": "seed-demo",
+  "playerCivId": "franks",
+  "activeCivs": ["franks"],
+  "civStates": {
+    "franks": {
+      "civilizationId": "franks",
+      "resources": { "food": 30, "wood": 35, "stone": 5, "knowledge": 0 },
+      "era": 1,
+      "autoPlay": false,
+      "townHallTileId": 0
+    }
+  },
+  "tickCount": 1,
+  "tiles": [],
+  "workers": [],
+  "buildings": [],
+  "savedAt": null
+}

@@ -12,7 +12,7 @@ The Holdfast API relies on asynchronous snapshot evaluation. There is no sustain
 
 **Header:** `X-User-Id` (string, optional; defaults to `local` if omitted)
 
-**Payload Boundary Request:** Serialised `GameState` JSON mapped directly to the local memory parameters.
+**Payload Boundary Request:** Serialised `GameState` JSON mapped directly to the local memory parameters, including multi-civilisation state (`playerCivId`, `activeCivs`, `civStates`).
 
 **Evaluation Mechanism:** The backend routes the payload across an isolated, synchronous `SnapshotValidator` pipeline testing strict business logic invariants.
 
@@ -52,19 +52,23 @@ The Holdfast API relies on asynchronous snapshot evaluation. There is no sustain
 
 **Function:** Returns the most recent valid `GameState` snapshot for the requested user identifier.
 
-**Client Action:** Triggers a pipeline re-seeding the Web Worker from the exact persisted `tickCount` and the correlated determinable `mapSeed`.
+**Client Action:** Triggers a pipeline re-seeding the Web Worker from the exact persisted `tickCount` and the correlated determinable `mapSeed`, restoring all civ state.
 
 ## 3. The Validation Invariant Matrix
 
-The `SnapshotValidator` class maps discrete, mathematically structured rules enforcing systemic sanctity. Each invariant evaluates in an isolated context.
+The `SnapshotValidator` class maps discrete, mathematically structured rules enforcing systemic sanctity. Invariants now apply per-civilisation where applicable.
 
-| Invocation Context | Analytical Pipeline Check                                   | Rejection Typology                                                    |
-| ------------------ | ----------------------------------------------------------- | --------------------------------------------------------------------- |
-| `ResourceCap`      | `resources[x] <= max_possible(tickCount, buildings)`        | Absolute totals eclipse projected maximal bounds.                     |
-| `EraGate`          | Structural hierarchy evaluation matching current parameters | Higher-tier topology submitted before required era thresholds.        |
-| `WorkerCap`        | `workers.length <= housing_capacity(buildings)`             | Worker demographic index unsupported by local housing capacity.       |
-| `TickSanity`       | `tickCount > lastSave.tickCount`                            | Chronological manipulation detected; absolute vector regressed.       |
-| `MapSeedConsistency` | `mapSeed == previous.mapSeed`                             | Seed string injected mid-session causing deterministic topology drift.|
+| Invocation Context | Analytical Pipeline Check                                               | Rejection Typology                                                    |
+| ------------------ | ----------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `CivRoster`        | `playerCivId`, `activeCivs`, `civStates` must align and be stable        | Civ roster drift or malformed civ state.                              |
+| `ResourceCap`      | Per civ: `resources[x] <= max_possible(tickCount, buildings, workers)`   | Absolute totals eclipse projected maximal bounds.                     |
+| `EraGate`          | Per civ: `building.requiredEra <= civStates[civ].era`                    | Higher-tier topology submitted before required era thresholds.        |
+| `WorkerCap`        | Per civ: `workers.length <= housing_capacity(buildings)`                 | Worker demographic index unsupported by local housing capacity.       |
+| `TownHall`         | Exactly one Town Hall per civ + townHallTileId alignment                 | Missing or duplicated Town Hall entries.                              |
+| `TileGrid`         | Tile ids/count must match the deterministic 80x80 grid                   | Malformed or inconsistent tile topology.                              |
+| `AssignmentConsistency` | Worker/building assignments must be bidirectionally consistent      | Assigned workers/buildings do not line up.                            |
+| `TickSanity`       | `tickCount > lastSave.tickCount`                                         | Chronological manipulation detected; absolute vector regressed.       |
+| `MapSeedConsistency` | `mapSeed == previous.mapSeed`                                         | Seed string injected mid-session causing deterministic topology drift.|
 
 ## 4. Persistence Status
 

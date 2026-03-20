@@ -27,6 +27,8 @@ function App() {
   const {
     placeBuilding,
     initEngine,
+    saveGame,
+    loadLatest,
     updateCamera,
     setHoveredTile,
     assignWorker,
@@ -42,6 +44,8 @@ function App() {
     gameStarted,
     playerCivId,
   } = store;
+
+  const [checkingSave, setCheckingSave] = useState(true);
 
   // Tooltip position tracking
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
@@ -59,6 +63,26 @@ function App() {
   const handleCivSelect = (civId: CivilizationId) => {
     initEngine(mapSeed, civId);
   };
+
+  useEffect(() => {
+    let active = true;
+    loadLatest()
+      .finally(() => {
+        if (active) setCheckingSave(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [loadLatest]);
+
+  useEffect(() => {
+    if (!gameStarted) return;
+    saveGame();
+    const interval = setInterval(() => {
+      saveGame();
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [gameStarted, saveGame]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -245,9 +269,19 @@ function App() {
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-black">
       {!gameStarted && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black">
-          <CivSelector onSelect={handleCivSelect} />
-        </div>
+        <>
+          {checkingSave ? (
+            <div className="absolute inset-0 z-50 flex items-center justify-center bg-black">
+              <span style={{ color: "#e8e8d0", fontSize: "10px" }}>
+                Loading save...
+              </span>
+            </div>
+          ) : (
+            <div className="absolute inset-0 z-50 flex items-center justify-center bg-black">
+              <CivSelector onSelect={handleCivSelect} />
+            </div>
+          )}
+        </>
       )}
       <canvas
         ref={canvasRef}

@@ -19,19 +19,24 @@ Initialises the validation sequence processing the serialised differential topol
 ```json
 {
   "mapSeed": "deterministic-seed-123",
-  "tickCount": 1403,
-  "era": 1,
-  "resources": {
-    "food": 850,
-    "wood": 320,
-    "stone": 105,
-    "knowledge": 0
+  "playerCivId": "franks",
+  "activeCivs": ["franks", "malians", "byzantines", "normans"],
+  "civStates": {
+    "franks": {
+      "civilizationId": "franks",
+      "resources": { "food": 850, "wood": 320, "stone": 105, "knowledge": 0 },
+      "era": 1,
+      "autoPlay": false,
+      "townHallTileId": 3280
+    }
   },
+  "tickCount": 1403,
   "tiles": [
     {
       "id": 3281,
       "type": "GRASSLAND",
       "owned": true,
+      "ownerId": "franks",
       "walkable": true,
       "visible": true,
       "buildingId": null
@@ -40,17 +45,21 @@ Initialises the validation sequence processing the serialised differential topol
   "workers": [
     {
       "id": "w-0-0",
+      "ownerId": "franks",
+      "unitType": "WORKER",
       "state": "HARVESTING",
       "assignedBuildingId": "b-1-3280",
       "position": { "x": 40, "y": 41 },
       "path": [],
       "harvestTicks": 2,
-      "carrying": null
+      "carrying": null,
+      "visionRadius": 2
     }
   ],
   "buildings": [
     {
       "id": "b-1-3280",
+      "ownerId": "franks",
       "type": "FORAGER_HUT",
       "tileId": 3280,
       "tier": 1,
@@ -96,12 +105,13 @@ The Web Worker emits the following payload every tick:
 interface TickResult {
   type: "TICK_RESULT";
   tickCount: number;
-  resourceTotals: ResourcePool; // Absolute values post-commit
-  resourceDelta: ResourcePool; // Per-tick change (+/-)
+  civStates: Record<string, CivRuntimeState>; // Per-civ state snapshots
+  playerCivId: CivilizationId;
+  resourceDelta: ResourcePool; // Per-tick change (+/-) for player civ
   workerPositions: { id; tileId; state }[];
   buildingUpdates: { id; staffed; operational }[];
   eraChanged: boolean;
-  newEra?: 1 | 2 | 3;
+  newEra?: 1 | 2 | 3 | 4;
   actionRejections: { action; reason }[];
   workers: WorkerState[]; // Full state for UI sync
   buildings: BuildingState[]; // Full state for UI sync

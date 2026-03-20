@@ -20,6 +20,11 @@ import {
   expandTerritory,
 } from "../engine/map-generator";
 import { UNIT_CONFIG } from "../engine/building-config";
+import {
+  loadLatestSnapshot,
+  saveSnapshot,
+  SnapshotValidationError,
+} from "../api/holdfast-api";
 
 /** Camera pan/zoom state for the canvas renderer. */
 export interface CameraState {
@@ -68,6 +73,58 @@ const ACTION_REJECTION_MESSAGES: Record<string, string> = {
   NO_CIV_STATE: "Civilization state not found.",
 };
 
+const USER_ID_KEY = "holdfast-user-id";
+const SAVE_SLOT_KEY = "holdfast-save-slot";
+
+function generateLocalId(prefix: string): string {
+  return typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function getOrCreateUserId(): string {
+  if (typeof window === "undefined") return "local";
+  try {
+    const existing = window.localStorage.getItem(USER_ID_KEY);
+    if (existing) return existing;
+    const id = generateLocalId("user");
+    window.localStorage.setItem(USER_ID_KEY, id);
+    return id;
+  } catch {
+    return "local";
+  }
+}
+
+function getOrCreateSaveSlotId(): string {
+  if (typeof window === "undefined") return "slot-local";
+  try {
+    const existing = window.localStorage.getItem(SAVE_SLOT_KEY);
+    if (existing) return existing;
+    const id = generateLocalId("slot");
+    window.localStorage.setItem(SAVE_SLOT_KEY, id);
+    return id;
+  } catch {
+    return "slot-local";
+  }
+}
+
+const baseUserId = getOrCreateUserId();
+let saveSlotId = getOrCreateSaveSlotId();
+
+function getSaveUserId(): string {
+  return `${baseUserId}:${saveSlotId}`;
+}
+
+function resetSaveSlot(): void {
+  saveSlotId = generateLocalId("slot");
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(SAVE_SLOT_KEY, saveSlotId);
+  } catch {
+    // Ignore storage failures; session will be in-memory only.
+  }
+}
+
 let alertCounter = 0;
 
 function formatActionRejection(reason: string): string {
@@ -109,6 +166,8 @@ export interface GameStore {
 
   // Actions
   initEngine: (seed: string, playerCivId: CivilizationId) => void;
+  saveGame: () => Promise<void>;
+  loadLatest: () => Promise<boolean>;
   pauseEngine: () => void;
   resumeEngine: () => void;
   togglePause: () => void;
@@ -138,6 +197,9 @@ const worker = new Worker(
 );
 
 export const useGameStore = create<GameStore>((set, get) => {
+  let saveInFlight = false;
+  let lastSavedTick = -1;
+
   const pushActionAlert = (message: string) => {
     const id = `alert-${Date.now()}-${alertCounter++}`;
     set((state) => ({
@@ -153,6 +215,48 @@ export const useGameStore = create<GameStore>((set, get) => {
 
   const handleActionRejection = (reason: string) => {
     pushActionAlert(formatActionRejection(reason));
+  };
+
+  const buildSnapshot = (): GameState => {
+    const state = get();
+    return {
+      mapSeed: state.mapSeed,
+      playerCivId: state.playerCivId,
+      activeCivs: state.activeCivs,
+      civStates: state.civStates,
+      tickCount: state.tickCount,
+      tiles: state.tiles,
+      workers: state.workers,
+      buildings: state.buildings,
+      savedAt: state.savedAt,
+    };
+  };
+
+  const hydrateFromSnapshot = (snapshot: GameState) => {
+    const playerCivState = snapshot.civStates[snapshot.playerCivId];
+    set({
+      mapSeed: snapshot.mapSeed,
+      tickCount: snapshot.tickCount,
+      tiles: snapshot.tiles,
+      workers: snapshot.workers,
+      buildings: snapshot.buildings,
+      playerCivId: snapshot.playerCivId,
+      activeCivs: snapshot.activeCivs,
+      civStates: snapshot.civStates,
+      resources: playerCivState ? { ...playerCivState.resources } : get().resources,
+      era: playerCivState?.era || get().era,
+      savedAt: snapshot.savedAt,
+      saveStatus: "synced",
+      autoPlay: playerCivState?.autoPlay ?? false,
+      gameStarted: true,
+      isPaused: false,
+      resourceDelta: { food: 0, wood: 0, stone: 0, knowledge: 0 },
+    });
+
+    lastSavedTick = snapshot.tickCount;
+
+    const cmd: WorkerInbound = { type: "INIT", state: snapshot };
+    worker.postMessage(cmd);
   };
 
   // Listen for Worker messages
@@ -181,7 +285,7 @@ export const useGameStore = create<GameStore>((set, get) => {
         break;
       }
       case "READY":
-        console.log("[Holdfast] Engine Ready — Multi-Civ Mode");
+        console.log("[Holdfast] Engine Ready - Multi-Civ Mode");
         break;
       case "ACTION_REJECTED":
         console.warn("[Holdfast] Action Rejected:", event.reason, event.action);
@@ -222,6 +326,8 @@ export const useGameStore = create<GameStore>((set, get) => {
     },
 
     initEngine: (seed: string, playerCivId: CivilizationId) => {
+      resetSaveSlot();
+      lastSavedTick = -1;
       const allCivIds: CivilizationId[] = CIVILIZATION_LIST.map(c => c.id);
       const aiCivIds = allCivIds.filter(id => id !== playerCivId);
       const activeCivs: CivilizationId[] = [playerCivId, ...aiCivIds];
@@ -268,8 +374,8 @@ export const useGameStore = create<GameStore>((set, get) => {
           tier: 1,
           constructionTicksRemaining: 0,
           constructionWorkerId: null,
-          staffed: false,
-          operational: false,
+          staffed: true,
+          operational: true,
           assignedWorkerIds: [],
         };
         buildings.push(townHall);
@@ -318,6 +424,9 @@ export const useGameStore = create<GameStore>((set, get) => {
         tickCount: 0,
         gameStarted: true,
         autoPlay: false,
+        saveStatus: "synced",
+        savedAt: null,
+        resourceDelta: { food: 0, wood: 0, stone: 0, knowledge: 0 },
         // Center camera on player spawn (map is centered by default, so we just offset by the distance to spawn from center)
         camera: {
           zoom: 1.5,
@@ -341,6 +450,51 @@ export const useGameStore = create<GameStore>((set, get) => {
 
       const cmd: WorkerInbound = { type: "INIT", state: initialState };
       worker.postMessage(cmd);
+    },
+
+    saveGame: async () => {
+      if (!get().gameStarted || saveInFlight) return;
+      const snapshot = buildSnapshot();
+      if (snapshot.tickCount <= lastSavedTick) return;
+      saveInFlight = true;
+      set({ saveStatus: "pending" });
+
+      try {
+        const response = await saveSnapshot(snapshot, getSaveUserId());
+        lastSavedTick = snapshot.tickCount;
+        set({ saveStatus: "synced", savedAt: response.savedAt });
+      } catch (error) {
+        set({ saveStatus: "error" });
+        if (error instanceof SnapshotValidationError) {
+          const first = error.violations[0];
+          const detail = first
+            ? `${first.rule}: ${first.detail}`
+            : "Snapshot validation failed.";
+          pushActionAlert(`Save rejected - ${detail}`);
+        } else if (error instanceof Error) {
+          pushActionAlert(`Save failed - ${error.message}`);
+        } else {
+          pushActionAlert("Save failed.");
+        }
+      } finally {
+        saveInFlight = false;
+      }
+    },
+
+    loadLatest: async () => {
+      try {
+        const snapshot = await loadLatestSnapshot(getSaveUserId());
+        if (!snapshot) return false;
+        hydrateFromSnapshot(snapshot);
+        return true;
+      } catch (error) {
+        if (error instanceof Error) {
+          pushActionAlert(`Load failed - ${error.message}`);
+        } else {
+          pushActionAlert("Load failed.");
+        }
+        return false;
+      }
     },
 
     pauseEngine: () => {

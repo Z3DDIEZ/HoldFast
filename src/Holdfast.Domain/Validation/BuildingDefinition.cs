@@ -7,5 +7,6 @@ public sealed record BuildingDefinition(
     ResourceType? Resource,
     int YieldAmount,
     int TicksToHarvest,
+    int RequiredWorkers,
     int RequiredEra,
     int HousingCapacity);

@@ -12,7 +12,7 @@ The Holdfast state logic depends entirely upon preventing client-side computatio
 
 **Objective**: Prevent mathematical hallucination injecting disproportionate resource indices.
 
-**Algorithmic Assert**: `resources[poolType] <= maximum_algorithmic_possibility(tickCount, buildings)`
+**Algorithmic Assert**: Per civ, `resources[poolType] <= maximum_algorithmic_possibility(tickCount, buildings, workers)`
 
 **Failure Logic**: The submitted cumulative resource exceeds theoretical maxima dictated by elapsed ticks, constructed buildings, and storage capacity.
 
@@ -20,7 +20,7 @@ The Holdfast state logic depends entirely upon preventing client-side computatio
 
 **Objective**: Ensure higher-tier buildings do not appear before the required era.
 
-**Algorithmic Assert**: Building `requiredEra` must be `<= snapshot.era`.
+**Algorithmic Assert**: Per civ, building `requiredEra` must be `<= civStates[civ].era`.
 
 **Failure Logic**: Tier 2 or Tier 3 structures (Farm, Library, Barracks) appear before the target era is reached.
 
@@ -28,7 +28,7 @@ The Holdfast state logic depends entirely upon preventing client-side computatio
 
 **Objective**: Bound population strictly against available housing capacity.
 
-**Algorithmic Assert**: `workers.length <= sum(housing_capacity(buildings))`
+**Algorithmic Assert**: Per civ, `workers.length <= sum(housing_capacity(buildings))`
 
 **Failure Logic**: Worker count exceeds housing capacity derived from constructed buildings (Town Hall, Storehouse, Barracks).
 
@@ -47,3 +47,35 @@ The Holdfast state logic depends entirely upon preventing client-side computatio
 **Algorithmic Assert**: `mapSeed == lastSave.mapSeed` (if a prior save exists).
 
 **Failure Logic**: The map seed changes mid-session.
+
+#### 6. Civilization Roster Integrity (`CivRoster`)
+
+**Objective**: Enforce a stable multi-civ roster and prevent civ drift.
+
+**Algorithmic Assert**: `playerCivId` ∈ `activeCivs`, `civStates` contains exactly `activeCivs`, and roster matches the previous save.
+
+**Failure Logic**: Civ lists mismatch, entries are missing, or ids change between saves.
+
+#### 7. Tile Grid Integrity (`TileGrid`)
+
+**Objective**: Maintain the deterministic 80x80 topology.
+
+**Algorithmic Assert**: `tiles.length == 6400`, ids are unique, and ids ∈ `[0..6399]`.
+
+**Failure Logic**: Malformed or inconsistent tile grids.
+
+#### 8. Assignment Consistency (`AssignmentConsistency`)
+
+**Objective**: Keep worker/building assignments bidirectionally consistent.
+
+**Algorithmic Assert**: If `worker.assignedBuildingId == b.id`, then `b.assignedWorkerIds` contains that worker (and vice versa).
+
+**Failure Logic**: Assignments are missing, duplicated, or cross-civilisation.
+
+#### 9. Town Hall Integrity (`TownHall`)
+
+**Objective**: Guarantee a single Town Hall per civ.
+
+**Algorithmic Assert**: Exactly one `TOWN_HALL` exists for each civ and matches `townHallTileId`.
+
+**Failure Logic**: Missing or duplicate Town Halls.

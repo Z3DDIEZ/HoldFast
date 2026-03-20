@@ -640,9 +640,13 @@ function validateAndApplyAction(action: PlayerAction, civId: CivilizationId): st
           return "BUILDING_FULLY_STAFFED";
         }
       } else {
+        if (b.constructionWorkerId) {
+          return "BUILDING_ALREADY_BEING_BUILT";
+        }
         if (b.assignedWorkerIds.length >= 1) {
           return "BUILDING_ALREADY_BEING_BUILT";
         }
+        b.constructionWorkerId = w.id;
       }
 
       w.assignedBuildingId = b.id;
@@ -661,6 +665,9 @@ function validateAndApplyAction(action: PlayerAction, civId: CivilizationId): st
       );
       if (b) {
         b.assignedWorkerIds = b.assignedWorkerIds.filter((id) => id !== w.id);
+        if (b.constructionWorkerId === w.id) {
+          b.constructionWorkerId = null;
+        }
       }
 
       w.assignedBuildingId = null;

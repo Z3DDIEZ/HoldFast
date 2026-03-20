@@ -10,6 +10,7 @@ public sealed record TileState
         int id,
         string type,
         bool owned,
+        string? ownerId,
         bool walkable,
         bool visible,
         string? buildingId)
@@ -17,6 +18,7 @@ public sealed record TileState
         Id = id;
         Type = type;
         Owned = owned;
+        OwnerId = ownerId;
         Walkable = walkable;
         Visible = visible;
         BuildingId = buildingId;
@@ -27,6 +29,8 @@ public sealed record TileState
     public string Type { get; init; } = string.Empty;
 
     public bool Owned { get; init; }
+
+    public string? OwnerId { get; init; }
 
     public bool Walkable { get; init; }
 

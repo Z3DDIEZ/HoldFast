@@ -29,7 +29,7 @@ public class SnapshotValidatorTests
         var validator = new SnapshotValidator();
         var buildings = new List<BuildingState>
         {
-            CreateBuilding(BuildingCatalog.Farm),
+            CreateBuilding(BuildingCatalog.Farm, tileId: 1),
         };
         var snapshot = CreateSnapshot(era: 1, buildings: buildings);
 
@@ -95,8 +95,8 @@ public class SnapshotValidatorTests
         var validator = new SnapshotValidator();
         var buildings = new List<BuildingState>
         {
-            CreateBuilding(BuildingCatalog.TownHall),
-            CreateBuilding(BuildingCatalog.Storehouse),
+            CreateBuilding(BuildingCatalog.TownHall, tileId: 0),
+            CreateBuilding(BuildingCatalog.Storehouse, tileId: 1),
         };
         var workers = new List<WorkerState>
         {
@@ -123,42 +123,113 @@ public class SnapshotValidatorTests
         IReadOnlyList<TileState>? tiles = null,
         IReadOnlyList<WorkerState>? workers = null,
         IReadOnlyList<BuildingState>? buildings = null,
-        string mapSeed = "seed")
+        string mapSeed = "seed",
+        string civId = "franks")
     {
+        var tileList = tiles?.ToList() ?? CreateTiles();
+        var buildingList = buildings?.ToList() ?? new List<BuildingState>();
+
+        var townHall = buildingList.FirstOrDefault(b =>
+            string.Equals(b.Type, BuildingCatalog.TownHall, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(b.OwnerId, civId, StringComparison.OrdinalIgnoreCase));
+        if (townHall is null)
+        {
+            townHall = CreateBuilding(BuildingCatalog.TownHall, ownerId: civId, tileId: 0);
+            buildingList.Add(townHall);
+        }
+
+        foreach (var building in buildingList)
+        {
+            if (building.TileId >= 0 && building.TileId < tileList.Count)
+            {
+                var tile = tileList[building.TileId];
+                tileList[building.TileId] = tile with
+                {
+                    BuildingId = building.Id,
+                    Owned = true,
+                    OwnerId = building.OwnerId,
+                };
+            }
+        }
+
+        var workerList = workers?.ToList() ?? new List<WorkerState>();
+        var civState = new CivRuntimeState(
+            civId,
+            resources ?? new ResourcePool(0, 0, 0, 0),
+            era,
+            autoPlay: false,
+            townHallTileId: townHall.TileId);
+
         return new GameState(
             mapSeed,
+            civId,
+            new List<string> { civId },
+            new Dictionary<string, CivRuntimeState> { [civId] = civState },
             tickCount,
-            era,
-            resources ?? new ResourcePool(0, 0, 0, 0),
-            tiles ?? Array.Empty<TileState>(),
-            workers ?? Array.Empty<WorkerState>(),
-            buildings ?? Array.Empty<BuildingState>(),
+            tileList,
+            workerList,
+            buildingList,
             DateTimeOffset.UtcNow);
     }
 
-    private static BuildingState CreateBuilding(string type, int constructionTicksRemaining = 0)
+    private static List<TileState> CreateTiles()
     {
+        var tiles = new List<TileState>(SnapshotRules.ExpectedTileCount);
+        for (var i = 0; i < SnapshotRules.ExpectedTileCount; i++)
+        {
+            tiles.Add(new TileState(
+                id: i,
+                type: "GRASSLAND",
+                owned: false,
+                ownerId: null,
+                walkable: true,
+                visible: true,
+                buildingId: null));
+        }
+
+        return tiles;
+    }
+
+    private static BuildingState CreateBuilding(
+        string type,
+        string ownerId = "franks",
+        int tileId = 0,
+        int constructionTicksRemaining = 0,
+        IReadOnlyList<string>? assignedWorkerIds = null)
+    {
+        var assigned = assignedWorkerIds ?? Array.Empty<string>();
+        var requiredWorkers = BuildingCatalog.TryGetDefinition(type, out var definition)
+            ? definition.RequiredWorkers
+            : 0;
+        var isConstructed = constructionTicksRemaining == 0;
+        var staffed = isConstructed && assigned.Count >= requiredWorkers;
+        var operational = staffed && isConstructed;
+
         return new BuildingState(
-            id: $"b-{type}",
+            id: $"b-{ownerId}-{type}-{tileId}",
+            ownerId: ownerId,
             type: type,
-            tileId: 0,
+            tileId: tileId,
             tier: 1,
             constructionTicksRemaining: constructionTicksRemaining,
             constructionWorkerId: null,
-            staffed: false,
-            operational: false,
-            assignedWorkerIds: Array.Empty<string>());
+            staffed: staffed,
+            operational: operational,
+            assignedWorkerIds: assigned);
     }
 
-    private static WorkerState CreateWorker(string id, string? assignedBuildingId = null)
+    private static WorkerState CreateWorker(string id, string? assignedBuildingId = null, string ownerId = "franks")
     {
         return new WorkerState(
             id,
+            ownerId,
+            unitType: "WORKER",
             state: "IDLE",
             assignedBuildingId: assignedBuildingId,
             position: new TileCoordinate(0, 0),
             path: Array.Empty<TileCoordinate>(),
             harvestTicks: 0,
-            carrying: null);
+            carrying: null,
+            visionRadius: 2);
     }
 }

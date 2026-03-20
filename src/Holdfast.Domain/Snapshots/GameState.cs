@@ -8,18 +8,20 @@ public sealed record GameState
 
     public GameState(
         string mapSeed,
+        string playerCivId,
+        IReadOnlyList<string> activeCivs,
+        IReadOnlyDictionary<string, CivRuntimeState> civStates,
         long tickCount,
-        int era,
-        ResourcePool resources,
         IReadOnlyList<TileState> tiles,
         IReadOnlyList<WorkerState> workers,
         IReadOnlyList<BuildingState> buildings,
         DateTimeOffset? savedAt)
     {
         MapSeed = mapSeed;
+        PlayerCivId = playerCivId;
+        ActiveCivs = activeCivs;
+        CivStates = civStates;
         TickCount = tickCount;
-        Era = era;
-        Resources = resources;
         Tiles = tiles;
         Workers = workers;
         Buildings = buildings;
@@ -28,11 +30,14 @@ public sealed record GameState
 
     public string MapSeed { get; init; } = string.Empty;
 
+    public string PlayerCivId { get; init; } = string.Empty;
+
+    public IReadOnlyList<string> ActiveCivs { get; init; } = Array.Empty<string>();
+
+    public IReadOnlyDictionary<string, CivRuntimeState> CivStates { get; init; } =
+        new Dictionary<string, CivRuntimeState>(StringComparer.OrdinalIgnoreCase);
+
     public long TickCount { get; init; }
-
-    public int Era { get; init; }
-
-    public ResourcePool Resources { get; init; } = new();
 
     public IReadOnlyList<TileState> Tiles { get; init; } = Array.Empty<TileState>();
 

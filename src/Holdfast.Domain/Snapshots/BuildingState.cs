@@ -8,6 +8,7 @@ public sealed record BuildingState
 
     public BuildingState(
         string id,
+        string ownerId,
         string type,
         int tileId,
         int tier,
@@ -18,6 +19,7 @@ public sealed record BuildingState
         IReadOnlyList<string> assignedWorkerIds)
     {
         Id = id;
+        OwnerId = ownerId;
         Type = type;
         TileId = tileId;
         Tier = tier;
@@ -29,6 +31,8 @@ public sealed record BuildingState
     }
 
     public string Id { get; init; } = string.Empty;
+
+    public string OwnerId { get; init; } = string.Empty;
 
     public string Type { get; init; } = string.Empty;
 
