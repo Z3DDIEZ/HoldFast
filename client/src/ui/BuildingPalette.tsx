@@ -51,8 +51,9 @@ export function BuildingPalette() {
         const isDisabled = isLocked || !affordable;
 
         return (
-          <div
+          <button
             key={b.id}
+            type="button"
             className={`
               flex-shrink-0 flex flex-col items-center justify-between
               w-[76px] h-[72px] p-2 relative select-none
@@ -67,6 +68,8 @@ export function BuildingPalette() {
               if (!affordable) return;
               selectBuilding(isSelected ? null : b.id);
             }}
+            disabled={isDisabled}
+            aria-pressed={isSelected}
           >
             {/* Building name */}
             <span
@@ -153,7 +156,7 @@ export function BuildingPalette() {
                 </div>
               </div>
             )}
-          </div>
+          </button>
         );
       })}
     </div>

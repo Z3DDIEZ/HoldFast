@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useMemo } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ResourceBar } from "./ui/ResourceBar";
 import { EraPanel } from "./ui/EraPanel";
 import { HUD } from "./ui/BuildingPalette";
@@ -54,14 +54,13 @@ function App() {
     null,
   );
 
-  // Generate seed once on mount
-  const mapSeed = useMemo(
-    () => `seed-${Math.random().toString(36).substring(2, 9)}`,
-    [],
-  );
+  const mapSeedRef = useRef<string | null>(null);
 
   const handleCivSelect = (civId: CivilizationId) => {
-    initEngine(mapSeed, civId);
+    const seed =
+      mapSeedRef.current ??
+      (mapSeedRef.current = `seed-${Math.random().toString(36).substring(2, 9)}`);
+    initEngine(seed, civId);
   };
 
   useEffect(() => {
@@ -113,6 +112,7 @@ function App() {
 
   // Track total drag distance to distinguish click from drag
   const dragDistance = useRef(0);
+  const lastHoverTileId = useRef<number | null>(null);
 
   const handleCanvasClick = (e: React.MouseEvent) => {
     if (!rendererRef.current) return;
@@ -122,6 +122,7 @@ function App() {
 
     const tileId = rendererRef.current.screenToTileId(e.clientX, e.clientY);
     if (tileId !== null) {
+      if (confirmDemolishId !== null) setConfirmDemolishId(null);
       if (selectedBuilding) {
         placeBuilding(tileId);
       } else {
@@ -147,11 +148,13 @@ function App() {
     updateCamera({ zoom: newZoom });
   };
 
-  const isDragging = useRef(false);
+  const isDraggingRef = useRef(false);
+  const [dragging, setDragging] = useState(false);
   const lastMousePos = useRef({ x: 0, y: 0 });
 
   const handleMouseDown = (e: React.MouseEvent) => {
-    isDragging.current = true;
+    isDraggingRef.current = true;
+    setDragging(true);
     dragDistance.current = 0;
     lastMousePos.current = { x: e.clientX, y: e.clientY };
   };
@@ -162,9 +165,15 @@ function App() {
       const tileId = rendererRef.current.screenToTileId(e.clientX, e.clientY);
       setHoveredTile(tileId);
       setTooltipPos({ x: e.clientX, y: e.clientY });
+      if (tileId !== lastHoverTileId.current) {
+        lastHoverTileId.current = tileId;
+        if (selectedTileId === null && confirmDemolishId !== null) {
+          setConfirmDemolishId(null);
+        }
+      }
     }
 
-    if (!isDragging.current) return;
+    if (!isDraggingRef.current) return;
 
     const dx = e.clientX - lastMousePos.current.x;
     const dy = e.clientY - lastMousePos.current.y;
@@ -178,12 +187,18 @@ function App() {
   };
 
   const handleMouseUp = () => {
-    isDragging.current = false;
+    isDraggingRef.current = false;
+    setDragging(false);
   };
 
   const handleMouseLeave = () => {
-    isDragging.current = false;
+    isDraggingRef.current = false;
+    setDragging(false);
     setHoveredTile(null);
+    lastHoverTileId.current = null;
+    if (selectedTileId === null && confirmDemolishId !== null) {
+      setConfirmDemolishId(null);
+    }
   };
 
   // Show ONLY player's buildings in the right panel
@@ -224,10 +239,6 @@ function App() {
         })
       : [];
 
-  useEffect(() => {
-    setConfirmDemolishId(null);
-  }, [activeBuilding?.id]);
-
   const canAssignToBuilding =
     activeBuilding &&
     activeBuildingConfig &&
@@ -261,9 +272,15 @@ function App() {
   const showTooltip =
     hoveredTile &&
     hoveredTile.visible &&
-    !isDragging.current &&
+    !dragging &&
     tooltipPos.y > 60 &&
     tooltipPos.y < window.innerHeight - 110;
+
+  const tooltipMaxWidth = Math.min(200, window.innerWidth - 16);
+  const tooltipLeft = Math.max(
+    8,
+    Math.min(tooltipPos.x + 16, window.innerWidth - tooltipMaxWidth - 8),
+  );
 
   // ─── Render components ───
   return (
@@ -286,7 +303,11 @@ function App() {
       <canvas
         ref={canvasRef}
         id="game-canvas"
-        className={`absolute inset-0 w-full h-full ${selectedBuilding ? "cursor-crosshair" : "cursor-grab"}`}
+        className={`absolute inset-0 w-full h-full touch-none ${
+          selectedBuilding
+            ? "cursor-crosshair"
+            : "cursor-grab active:cursor-grabbing"
+        }`}
         onClick={handleCanvasClick}
         onWheel={handleWheel}
         onMouseDown={handleMouseDown}
@@ -502,9 +523,9 @@ function App() {
         <div
           className="fixed z-50 pointer-events-none bg-[#0f0f0f]/95 border border-[#2a2a2a] px-3 py-2 backdrop-blur-sm"
           style={{
-            left: tooltipPos.x + 16,
+            left: tooltipLeft,
             top: tooltipPos.y - 8,
-            maxWidth: 200,
+            maxWidth: tooltipMaxWidth,
           }}
         >
           {/* Tile type */}

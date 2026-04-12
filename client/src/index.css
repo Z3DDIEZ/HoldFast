@@ -21,6 +21,17 @@
     image-rendering: pixelated;
     image-rendering: crisp-edges;
   }
+
+  /* Accessible focus ring for keyboard navigation */
+  button:focus-visible,
+  [role="button"]:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline: 2px solid rgba(232, 232, 208, 0.7);
+    outline-offset: 2px;
+  }
 }
 
 /* Pixel font crispness — consistent letter spacing per PRD */
@@ -44,6 +55,28 @@
 
 .overflow-x-auto::-webkit-scrollbar-thumb:hover {
   background: #ffffff20;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #ffffff10;
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #ffffff20;
+}
+
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #ffffff20 transparent;
 }
 
 .scroller-none::-webkit-scrollbar {

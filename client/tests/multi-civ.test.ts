@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { getCornerSpawns, generateMultiStartMap, expandTerritory, MAP_WIDTH, MAP_HEIGHT } from "../src/engine/map-generator";
-import { getCivilization, CIVILIZATION_LIST, CIVILIZATIONS } from "../src/engine/civilizations";
-import type { CivilizationId, CivRuntimeState, TileState, BuildingState, UnitState, ResourcePool } from "../src/engine/tick-types";
+import { getCivilization, CIVILIZATION_LIST } from "../src/engine/civilizations";
+import type { CivilizationId, CivRuntimeState, BuildingState, UnitState, ResourcePool } from "../src/engine/tick-types";
 
 // ─── Corner Spawns ───────────────────────────────────────────────────────────
 

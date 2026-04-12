@@ -8,13 +8,13 @@ import type { CivilizationId } from "../engine/tick-types";
 export function CivSelector({ onSelect }: { onSelect: (id: CivilizationId) => void }) {
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md">
-      <div className="w-[520px] bg-[#0f0f0f] border border-[#ffffff10] rounded-2xl p-8 shadow-2xl flex flex-col gap-6">
+      <div className="w-[520px] max-w-[92vw] max-h-[85vh] overflow-hidden bg-[#0f0f0f] border border-[#ffffff10] rounded-2xl p-8 shadow-2xl flex flex-col gap-6">
         <div className="border-b border-[#ffffff10] pb-4">
           <h2 className="text-xl font-bold tracking-tighter text-[#e8e8d0]">CHOOSE YOUR CIVILIZATION</h2>
           <p className="text-[10px] text-[#888870] mt-1">Each civilization brings unique bonuses. Choose wisely — this cannot be changed.</p>
         </div>
 
-        <div className="grid grid-cols-1 gap-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+        <div className="grid grid-cols-1 gap-3 max-h-[min(400px,55vh)] overflow-y-auto pr-2 custom-scrollbar">
           {CIVILIZATION_LIST.map((civ) => (
             <button
               key={civ.id}
