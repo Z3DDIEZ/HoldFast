@@ -1,6 +1,17 @@
 import { CIVILIZATION_LIST } from "../engine/civilizations";
 import type { CivilizationId } from "../engine/tick-types";
 
+function BonusPill({ text, color, bg }: { text: string; color: string; bg: string }) {
+  return (
+    <span
+      className="text-[9px] px-2 py-1 rounded border"
+      style={{ color, backgroundColor: bg, borderColor: `${bg.slice(0, 7)}20` }}
+    >
+      {text}
+    </span>
+  );
+}
+
 /**
  * Civilization selection overlay — shown at startup.
  * Cannot be dismissed without selecting a civ. Selecting starts the game.
@@ -31,29 +42,19 @@ export function CivSelector({ onSelect }: { onSelect: (id: CivilizationId) => vo
               
               <div className="flex flex-wrap gap-2 mt-1">
                 {civ.bonuses.constructionSpeedMultiplier && (
-                   <span className="text-[9px] bg-[#4aaf4a15] text-[#4aaf4a] px-2 py-1 rounded border border-[#4aaf4a20]">
-                     +{Math.round((civ.bonuses.constructionSpeedMultiplier - 1) * 100)}% Construction Speed
-                   </span>
+                   <BonusPill bg="#4aaf4a15" color="#4aaf4a" text={`+${Math.round((civ.bonuses.constructionSpeedMultiplier - 1) * 100)}% Construction Speed`} />
                 )}
                 {civ.bonuses.yieldMultiplier?.knowledge && (
-                   <span className="text-[9px] bg-[#6a60c015] text-[#8b84d7] px-2 py-1 rounded border border-[#6a60c020]">
-                     +{Math.round((civ.bonuses.yieldMultiplier.knowledge - 1) * 100)}% Knowledge Yield
-                   </span>
+                   <BonusPill bg="#6a60c015" color="#8b84d7" text={`+${Math.round((civ.bonuses.yieldMultiplier.knowledge - 1) * 100)}% Knowledge Yield`} />
                 )}
                 {civ.bonuses.yieldMultiplier?.stone && (
-                   <span className="text-[9px] bg-[#90909015] text-[#b0b0b0] px-2 py-1 rounded border border-[#90909020]">
-                     +{Math.round((civ.bonuses.yieldMultiplier.stone - 1) * 100)}% Stone Yield
-                   </span>
+                   <BonusPill bg="#90909015" color="#b0b0b0" text={`+${Math.round((civ.bonuses.yieldMultiplier.stone - 1) * 100)}% Stone Yield`} />
                 )}
                 {civ.bonuses.visionRadiusBoost && (
-                   <span className="text-[9px] bg-[#eab30815] text-[#eab308] px-2 py-1 rounded border border-[#eab30820]">
-                     +{civ.bonuses.visionRadiusBoost} Range vision
-                   </span>
+                   <BonusPill bg="#eab30815" color="#eab308" text={`+${civ.bonuses.visionRadiusBoost} Range vision`} />
                 )}
                 {civ.bonuses.costMultiplier?.wood && (
-                   <span className="text-[9px] bg-[#4a8f3f15] text-[#63ad57] px-2 py-1 rounded border border-[#4a8f3f20]">
-                     -{Math.round((1 - civ.bonuses.costMultiplier.wood) * 100)}% Wood Cost
-                   </span>
+                   <BonusPill bg="#4a8f3f15" color="#63ad57" text={`-${Math.round((1 - civ.bonuses.costMultiplier.wood) * 100)}% Wood Cost`} />
                 )}
               </div>
             </button>

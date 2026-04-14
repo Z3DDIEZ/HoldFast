@@ -82,34 +82,21 @@ function generateLocalId(prefix: string): string {
     : `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-function getOrCreateUserId(): string {
-  if (typeof window === "undefined") return "local";
+function getOrCreateStorageId(key: string, prefix: string, fallback: string): string {
+  if (typeof window === "undefined") return fallback;
   try {
-    const existing = window.localStorage.getItem(USER_ID_KEY);
+    const existing = window.localStorage.getItem(key);
     if (existing) return existing;
-    const id = generateLocalId("user");
-    window.localStorage.setItem(USER_ID_KEY, id);
+    const id = generateLocalId(prefix);
+    window.localStorage.setItem(key, id);
     return id;
   } catch {
-    return "local";
+    return fallback;
   }
 }
 
-function getOrCreateSaveSlotId(): string {
-  if (typeof window === "undefined") return "slot-local";
-  try {
-    const existing = window.localStorage.getItem(SAVE_SLOT_KEY);
-    if (existing) return existing;
-    const id = generateLocalId("slot");
-    window.localStorage.setItem(SAVE_SLOT_KEY, id);
-    return id;
-  } catch {
-    return "slot-local";
-  }
-}
-
-const baseUserId = getOrCreateUserId();
-let saveSlotId = getOrCreateSaveSlotId();
+const baseUserId = getOrCreateStorageId(USER_ID_KEY, "user", "local");
+let saveSlotId = getOrCreateStorageId(SAVE_SLOT_KEY, "slot", "slot-local");
 
 function getSaveUserId(): string {
   return `${baseUserId}:${saveSlotId}`;
@@ -511,15 +498,9 @@ export const useGameStore = create<GameStore>((set, get) => {
 
     togglePause: () => {
       const paused = get().isPaused;
-      if (paused) {
-        const cmd: WorkerInbound = { type: "RESUME" };
-        worker.postMessage(cmd);
-        set({ isPaused: false });
-      } else {
-        const cmd: WorkerInbound = { type: "PAUSE" };
-        worker.postMessage(cmd);
-        set({ isPaused: true });
-      }
+      const cmd: WorkerInbound = { type: paused ? "RESUME" : "PAUSE" };
+      worker.postMessage(cmd);
+      set({ isPaused: !paused });
     },
 
     selectBuilding: (type: BuildingType | null) => {

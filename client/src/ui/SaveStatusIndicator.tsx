@@ -11,19 +11,18 @@ const STATUS_COLORS = {
   error: "#c04040",
 } as const;
 
+const STATUS_TEXT = {
+  synced: "SAVED",
+  pending: "SAVING...",
+  error: "ERROR",
+} as const;
+
 /**
  * Compact save status indicator showing a coloured dot
  * and timestamp. Sits inside the ResourceBar, right-aligned.
  */
 export function SaveStatusIndicator({ status, lastSavedAt }: Props) {
   const color = STATUS_COLORS[status];
-  let text = "SAVED";
-
-  if (status === "pending") {
-    text = "SAVING...";
-  } else if (status === "error") {
-    text = "ERROR";
-  }
 
   const timeStr = lastSavedAt
     ? new Date(lastSavedAt).toLocaleTimeString([], {
@@ -32,9 +31,9 @@ export function SaveStatusIndicator({ status, lastSavedAt }: Props) {
       })
     : "";
 
-  if (status === "synced" && timeStr) {
-    text = `SAVED ${timeStr}`;
-  }
+  const text = status === "synced" && timeStr
+    ? `SAVED ${timeStr}`
+    : STATUS_TEXT[status];
 
   return (
     <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#ffffff05] border border-[#ffffff08] transition-all">

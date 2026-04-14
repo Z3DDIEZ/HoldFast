@@ -48,5 +48,5 @@ export const CIVILIZATIONS: Record<CivilizationId, Civilization> = {
 export const CIVILIZATION_LIST: Civilization[] = Object.values(CIVILIZATIONS);
 
 export function getCivilization(id: CivilizationId): Civilization {
-  return CIVILIZATIONS[id] || CIVILIZATIONS.franks;
+  return CIVILIZATIONS[id] ?? CIVILIZATIONS.franks;
 }
